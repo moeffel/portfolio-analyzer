@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Portfolio Analyzer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#fcfcfb; --surface:#ffffff; --ink:#1a1a1a; --muted:#606060; --line:#e6e6e3;
+    --blue:#0072B2; --orange:#c77f00; --green:#009E73; --red:#D55E00;
+    --ok:#2e7d32; --warn:#b9770a; --alert:#c62828; --info:#1565c0;
+    --radius:12px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#15161a; --surface:#1e2027; --ink:#eceef2; --muted:#9aa0ab; --line:#2c2f38;
+           --orange:#E69F00; --ok:#66bb6a; --warn:#ffb74d; --alert:#ef5350; --info:#64b5f6; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--ink)}
+  header{padding:28px 20px 8px;max-width:1100px;margin:0 auto}
+  h1{margin:0 0 4px;font-size:26px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:14px;max-width:70ch}
+  main{max-width:1100px;margin:0 auto;padding:12px 20px 60px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+        padding:18px;margin:16px 0}
+  .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;align-items:end}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600;
+        text-transform:uppercase;letter-spacing:.04em}
+  input[type=text],input[type=number]{width:100%;padding:9px 10px;border:1px solid var(--line);
+        border-radius:8px;background:var(--bg);color:var(--ink);font-size:14px}
+  input[type=range]{width:100%}
+  .rangeval{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{border:0;background:var(--bg);color:var(--ink);padding:8px 14px;cursor:pointer;font-size:14px}
+  .seg button[aria-pressed=true]{background:var(--blue);color:#fff}
+  button.primary{background:var(--blue);color:#fff;border:0;border-radius:9px;padding:11px 20px;
+        font-size:15px;font-weight:600;cursor:pointer}
+  button.primary:disabled{opacity:.5;cursor:progress}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .kpi{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .kpi .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .kpi .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px}
+  .kpi .b{font-size:12px;color:var(--muted);margin-top:2px}
+  .flags{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+  .flag{display:flex;gap:10px;padding:11px 13px;border-radius:9px;border:1px solid var(--line);background:var(--bg)}
+  .flag .dot{flex:0 0 auto;font-weight:700}
+  .flag .msg{font-weight:600}
+  .flag .why{color:var(--muted);font-size:13px;margin-top:2px}
+  .flag.alert{border-left:4px solid var(--alert)}
+  .flag.warn{border-left:4px solid var(--warn)}
+  .flag.ok{border-left:4px solid var(--ok)}
+  .flag.info{border-left:4px solid var(--info)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.grid2{grid-template-columns:1fr}}
+  h2{font-size:16px;margin:0 0 12px;letter-spacing:-.01em}
+  table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  .heat td{color:#111;font-weight:600;border:2px solid var(--surface);border-radius:4px;text-align:center}
+  .muted{color:var(--muted)}
+  .banner{background:#fff6e6;border:1px solid #f0d488;color:#6b4e00;padding:10px 14px;border-radius:9px;font-size:13px}
+  @media (prefers-color-scheme: dark){.banner{background:#2a2410;border-color:#5c4d1a;color:#e9c766}}
+  details{margin-top:10px}
+  summary{cursor:pointer;color:var(--muted);font-size:13px}
+  canvas{max-width:100%}
+  .foot{color:var(--muted);font-size:12px;margin-top:24px;line-height:1.6}
+  .err{color:#fff;background:var(--alert);padding:10px 14px;border-radius:9px}
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 Portfolio Analyzer</h1>
+  <p class="sub">Evidenzbasierte Diagnostik für Privatanleger — PMPT/Sortino, Faktor-Scoring,
+  Risikometriken, Krypto- & Allokations-Ampeln, Österreich-Steuerhinweise.
+  <b>Diagnostik & Scoring, keine Anlageberatung.</b></p>
+</header>
+<main>
+  <div class="card">
+    <div style="margin-bottom:14px">
+      <span class="seg" role="group" aria-label="Datenquelle">
+        <button id="mSample" aria-pressed="true" onclick="setMode('sample')">Sample (synthetisch)</button>
+        <button id="mCsv" aria-pressed="false" onclick="setMode('csv')">CSV-Upload</button>
+      </span>
+    </div>
+    <div id="csvInputs" style="display:none;margin-bottom:14px">
+      <div class="controls">
+        <div><label>holdings.csv (Pflicht)</label><input type="file" id="fHoldings" accept=".csv"></div>
+        <div><label>prices.csv (optional)</label><input type="file" id="fPrices" accept=".csv"></div>
+        <div><label>fundamentals.csv (optional)</label><input type="file" id="fFund" accept=".csv"></div>
+      </div>
+    </div>
+    <div class="controls">
+      <div>
+        <label>MAR (Mindestrendite) <span class="rangeval" id="marV">2.0%</span></label>
+        <input type="range" id="mar" min="0" max="0.1" step="0.005" value="0.02" oninput="marV.textContent=(this.value*100).toFixed(1)+'%'">
+      </div>
+      <div>
+        <label>Risk-free <span class="rangeval" id="rfV">3.0%</span></label>
+        <input type="range" id="rf" min="0" max="0.06" step="0.005" value="0.03" oninput="rfV.textContent=(this.value*100).toFixed(1)+'%'">
+      </div>
+      <div>
+        <label>Krypto-Limit <span class="rangeval" id="mcV">5%</span></label>
+        <input type="range" id="mc" min="0" max="0.2" step="0.01" value="0.05" oninput="mcV.textContent=(this.value*100).toFixed(0)+'%'">
+      </div>
+      <div><label>Benchmark-Ticker</label><input type="text" id="bench" value="WORLD"></div>
+      <div><button class="primary" id="run" onclick="run()">Analysieren</button></div>
+    </div>
+  </div>
+
+  <div id="out" style="display:none">
+    <div id="banner"></div>
+    <div class="card"><div class="kpis" id="kpis"></div></div>
+    <div class="card"><h2>Diagnostik &amp; Ampeln</h2><ul class="flags" id="flags"></ul></div>
+    <div class="grid2">
+      <div class="card"><h2>Kumulierte Wertentwicklung</h2><canvas id="eqChart" height="200"></canvas></div>
+      <div class="card"><h2>Asset-Allokation: Aktuell vs. Ziel</h2><canvas id="allocChart" height="200"></canvas></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h2>Faktor-Composite je Titel</h2><canvas id="facChart" height="220"></canvas>
+        <p class="muted" style="font-size:12px">z-normierte Tilt-Rankings, keine Kaufsignale. Prämien
+        verlieren ~26–58% nach Publikation (McLean &amp; Pontiff 2016).</p></div>
+      <div class="card"><h2>Korrelationsmatrix</h2><div id="corr" class="muted">—</div></div>
+    </div>
+    <div class="card"><h2>Alle Kennzahlen</h2><div id="metricsTable"></div></div>
+  </div>
+
+  <p class="foot" id="foot"></p>
+</main>
+
+<script>
+const C = { blue:'#0072B2', orange:getComputedStyle(document.documentElement).getPropertyValue('--orange').trim()||'#c77f00',
+            green:'#009E73', red:'#D55E00', gray:'#9aa0ab' };
+let MODE='sample', charts={};
+
+function setMode(m){
+  MODE=m;
+  mSample.setAttribute('aria-pressed', m==='sample');
+  mCsv.setAttribute('aria-pressed', m==='csv');
+  csvInputs.style.display = m==='csv' ? 'block' : 'none';
+}
+const readFile = f => new Promise(res=>{ if(!f) return res(null); const r=new FileReader(); r.onload=()=>res(r.result); r.readAsText(f); });
+const pct = (x,d=1) => x==null||!isFinite(x) ? 'n/a' : (x*100).toFixed(d)+'%';
+const num = (x,d=2) => x==null||!isFinite(x) ? 'n/a' : Number(x).toFixed(d);
+
+async function run(){
+  const btn=document.getElementById('run'); btn.disabled=true; btn.textContent='Rechnet…';
+  const body={ mode:MODE, config:{ mar:+mar.value, risk_free:+rf.value, max_crypto:+mc.value, benchmark:bench.value.trim() } };
+  try{
+    if(MODE==='csv'){
+      body.holdings_csv = await readFile(fHoldings.files[0]);
+      body.prices_csv   = await readFile(fPrices.files[0]);
+      body.fundamentals_csv = await readFile(fFund.files[0]);
+      if(!body.holdings_csv) throw new Error('holdings.csv fehlt');
+    }
+    const r = await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j = await r.json();
+    if(!r.ok) throw new Error((j.error||'Fehler')+': '+(j.message||''));
+    render(j);
+  }catch(e){
+    out.style.display='block';
+    banner.innerHTML='<div class="err">'+e.message+'</div>';
+  }finally{ btn.disabled=false; btn.textContent='Analysieren'; }
+}
+
+function render(j){
+  out.style.display='block';
+  banner.innerHTML = j.meta.synthetic ? '<div class="banner">⚠️ Synthetische Sample-Daten — nur zur Demonstration.</div>' : '';
+  const m=j.metrics, bm=j.benchmark_metrics||{};
+  const tiles=[
+    ['Ann. Rendite', pct(m.annualized_return), 'BM '+pct(bm.annualized_return)],
+    ['Sortino (MAR)', num(m.sortino), 'PMPT · BM '+num(bm.sortino)],
+    ['Sharpe', num(m.sharpe), 'BM '+num(bm.sharpe)],
+    ['Volatilität', pct(m.volatility), 'σ p.a.'],
+    ['Max Drawdown', pct(m.max_drawdown), 'Peak-to-Trough'],
+    ['CVaR 95%', pct(m.cvar_95,2), 'tägl. Expected Shortfall'],
+  ];
+  kpis.innerHTML = tiles.map(t=>`<div class="kpi"><div class="k">${t[0]}</div><div class="v">${t[1]}</div><div class="b">${t[2]}</div></div>`).join('');
+
+  flags.innerHTML = j.flags.map(f=>{
+    const icon={ok:'🟢',warn:'🟡',alert:'🔴',info:'🔵'}[f.level]||'•';
+    return `<li class="flag ${f.level}"><span class="dot">${icon}</span><div><div class="msg">[${f.category}] ${f.message}</div>${f.rationale?`<div class="why">${f.rationale}</div>`:''}</div></li>`;
+  }).join('');
+
+  drawEquity(j.equity_curve);
+  drawAlloc(j.allocation_drift);
+  drawFactors(j.factor_scores);
+  drawCorr(j.correlation);
+  metricsTable.innerHTML = metricsTableHTML(m, bm);
+  foot.innerHTML = `Quelle: <code>${j.meta.source}</code> · MAR ${pct(j.meta.mar)} · n=${j.meta.n_obs||0} · `+
+    `Kein Backtester/Optimierer. Steuerhinweise mit Steuerberater/BMF verifizieren.`;
+}
+
+function fresh(id){ if(charts[id]) charts[id].destroy(); return document.getElementById(id).getContext('2d'); }
+const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--line').trim();
+const inkColor  = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+const baseOpts = { responsive:true, interaction:{mode:'index',intersect:false},
+  plugins:{legend:{labels:{color:inkColor,boxWidth:12}}},
+  scales:{x:{grid:{color:gridColor},ticks:{color:inkColor}},y:{grid:{color:gridColor},ticks:{color:inkColor}}} };
+
+function drawEquity(eq){
+  const labels=eq.map(p=>p[0]), data=eq.map(p=>p[1]);
+  charts.eqChart=new Chart(fresh('eqChart'),{type:'line',
+    data:{labels,datasets:[{label:'Portfolio',data,borderColor:C.blue,backgroundColor:'transparent',
+      borderWidth:2,pointRadius:0,tension:.05}]},
+    options:{...baseOpts,plugins:{...baseOpts.plugins,tooltip:{callbacks:{label:c=>'Index '+c.parsed.y.toFixed(3)}}},
+      scales:{...baseOpts.scales,x:{...baseOpts.scales.x,ticks:{color:inkColor,maxTicksLimit:6}}}}});
+}
+function drawAlloc(drift){
+  const labels=drift.map(d=>d.asset_class);
+  charts.allocChart=new Chart(fresh('allocChart'),{type:'bar',
+    data:{labels,datasets:[
+      {label:'Aktuell',data:drift.map(d=>d.current*100),backgroundColor:C.blue,borderRadius:4},
+      {label:'Ziel',data:drift.map(d=>d.target*100),backgroundColor:C.green,borderRadius:4}]},
+    options:{...baseOpts,scales:{...baseOpts.scales,y:{...baseOpts.scales.y,ticks:{color:inkColor,callback:v=>v+'%'}}}}});
+}
+function drawFactors(fs){
+  if(!fs.length){ document.getElementById('facChart').replaceWith(Object.assign(document.createElement('p'),{className:'muted',textContent:'Keine Fundamentaldaten → keine Faktor-Scores.'})); return; }
+  const labels=fs.map(r=>r.ticker), vals=fs.map(r=>r.composite);
+  charts.facChart=new Chart(fresh('facChart'),{type:'bar',
+    data:{labels,datasets:[{label:'Composite (z)',data:vals,
+      backgroundColor:vals.map(v=>v>=0?C.green:C.red),borderRadius:4}]},
+    options:{...baseOpts,indexAxis:'y',plugins:{legend:{display:false}},
+      scales:{x:{grid:{color:gridColor},ticks:{color:inkColor}},y:{grid:{display:false},ticks:{color:inkColor}}}}});
+}
+function drawCorr(corr){
+  if(!corr.tickers){ document.getElementById('corr').innerHTML='<span class="muted">Keine Kursreihen → keine Korrelation.</span>'; return; }
+  const cell = v => { // diverging blue(-1) - white(0) - red(+1)
+    const t=(v+1)/2; const r=Math.round(255*Math.min(1,2*t)), b=Math.round(255*Math.min(1,2*(1-t)));
+    const g=Math.round(255*(1-Math.abs(v))); return `rgb(${r},${g},${b})`;
+  };
+  let h='<table class="heat"><tr><th></th>'+corr.tickers.map(t=>`<th>${t}</th>`).join('')+'</tr>';
+  corr.matrix.forEach((row,i)=>{ h+=`<tr><th>${corr.tickers[i]}</th>`+
+    row.map(v=>`<td style="background:${cell(v)}">${v.toFixed(2)}</td>`).join('')+'</tr>'; });
+  document.getElementById('corr').innerHTML=h+'</table>';
+}
+function metricsTableHTML(m,bm){
+  const rows=[['Ann. Rendite',pct(m.annualized_return),pct(bm.annualized_return)],
+    ['Volatilität (σ)',pct(m.volatility),pct(bm.volatility)],
+    ['Downside-Deviation',pct(m.downside_deviation),pct(bm.downside_deviation)],
+    ['Sharpe',num(m.sharpe),num(bm.sharpe)],['Sortino (MAR)',num(m.sortino),num(bm.sortino)],
+    ['Max Drawdown',pct(m.max_drawdown),pct(bm.max_drawdown)],
+    ['VaR 95% (tägl.)',pct(m.var_95,2),pct(bm.var_95,2)],['CVaR 95% (tägl.)',pct(m.cvar_95,2),pct(bm.cvar_95,2)],
+    ['Beta',num(m.beta),'1.00'],['Treynor',num(m.treynor),'—']];
+  return '<table><tr><th>Kennzahl</th><th>Portfolio</th><th>Benchmark</th></tr>'+
+    rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')+'</table>';
+}
+</script>
+</body>
+</html>

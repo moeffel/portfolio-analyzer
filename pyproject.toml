@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "portfolio-analyzer"
+version = "0.1.0"
+description = "Evidence-based stock & portfolio diagnostics (PMPT/Sortino, factors, Austria-aware)"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "pandas>=2.0", "scipy>=1.10", "matplotlib>=3.7"]
+
+[project.optional-dependencies]
+live = ["yfinance>=0.2.40"]
+dashboard = ["streamlit>=1.30"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+portfolio-analyzer = "portfolio_analyzer.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["portfolio_analyzer*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

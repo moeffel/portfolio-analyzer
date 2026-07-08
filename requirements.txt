@@ -1,0 +1,4 @@
+# Vercel serverless-function deps ONLY (kept slim for fast, small builds).
+# The API path imports just the numpy/pandas analytics core — no matplotlib/scipy.
+numpy>=1.24
+pandas>=2.0

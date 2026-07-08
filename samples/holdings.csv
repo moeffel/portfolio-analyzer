@@ -1,0 +1,9 @@
+ticker,value,asset_class,ter,name,security_type
+WORLD,45000,equity,0.002,MSCI World ETF (core),etf
+EM,8000,equity,0.003,EM ETF (satellite),etf
+VAL,7000,equity,0.0035,Value factor ETF,etf
+SMALL,5000,equity,0.0035,Small-cap ETF,etf
+QLTY,6000,equity,0.0035,Quality factor ETF,etf
+AGG,12000,bond,0.001,Aggregate bond ETF,etf
+GOLD,4000,gold,0.004,Gold ETC,etf
+BTC,8000,crypto,0.0,Bitcoin,crypto
