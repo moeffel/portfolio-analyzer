@@ -83,7 +83,7 @@ Oder das Repo in Vercel importieren (GitHub-Integration) — kein Build-Command 
 
 | Modus | Daten | Kurse/Fundamentals |
 |---|---|---|
-| **Ticker + Gewichte** | dynamische Zeilen (Ticker, Gewicht %, Typ) oder **Screenshot-Upload** | live via yfinance → Stooq-Fallback; Fundamentals immer (gedeckelt, zeitbudgetiert) |
+| **Ticker + Gewichte** | dynamische Zeilen (**ISIN oder Ticker**, Gewicht %, Typ) oder **Screenshot-Upload** | ISIN → Yahoo-Symbol (Suchendpoint); live via yfinance → Stooq-Fallback; Fundamentals immer (gedeckelt, zeitbudgetiert) |
 | **Sample** | eingebautes synthetisches Portfolio | offline |
 | **CSV-Upload** | `holdings.csv` (+ optional `prices.csv`, `fundamentals.csv`) | aus den CSVs |
 
@@ -107,6 +107,9 @@ zeigt eine klare Fehlermeldung.
 - **Yahoo drosselt Datacenter-IPs** (Vercel): der Kursabruf kann fehlschlagen →
   automatischer **Stooq-Fallback**; scheitert auch der, gibt es Allokations-/
   Konzentrations-Diagnostik ohne Risikometriken + eine Warnung.
+- **ISIN-Auflösung** nutzt Yahoos Suchendpoint — schlägt sie fehl (Yahoo-Block),
+  zählt die Position weiter für die Allokation, aber ohne Kurse; dann alternativ
+  den Yahoo-Ticker direkt eintragen.
 - **Function-Timeout:** „Fundamentals immer" macht viele Netzwerk-Calls. Bei 504
   in Vercel → Project → Settings → **Functions → Max Duration** auf 60 s anheben.
 - **Lambda-Größe:** yfinance-Deps (curl_cffi) liegen bei ~211 MB entpackt (Limit

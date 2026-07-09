@@ -62,6 +62,24 @@ def test_stooq_symbol_mapping():
     assert analyze._stooq_symbol("BTC-USD") is None  # crypto -> skip Stooq
 
 
+def test_is_isin():
+    assert analyze._is_isin("IE00B4L5Y983")   # iShares Core MSCI World
+    assert analyze._is_isin("US0378331005")   # Apple
+    assert not analyze._is_isin("AAPL")
+    assert not analyze._is_isin("IE00B4L5Y98")   # too short
+    assert not analyze._is_isin("")
+
+
+def test_holdings_isin_row_pending_resolution():
+    h = analyze._holdings_from_rows([
+        {"ticker": "IE00B4L5Y983", "weight": 100, "type": "ETF"},
+    ])
+    row = h.iloc[0]
+    assert row["isin"] == "IE00B4L5Y983"
+    assert row["yf_symbol"] == ""        # empty => needs ISIN resolution later
+    assert row["ticker"] == "IE00B4L5Y983"
+
+
 # --- extract: vision tool-use parsing -----------------------------------------
 
 def _tool_resp(holdings, note=None):

@@ -113,15 +113,16 @@
         <input type="file" id="imgFile" accept="image/*" style="display:none">
       </div>
       <div id="imgStatus" class="muted" style="font-size:13px;margin-bottom:10px"></div>
-      <div class="thead"><span>Ticker (Yahoo, z.B. AAPL, IWDA.AS, BTC)</span><span>Gewicht %</span><span>Typ</span><span></span></div>
+      <div class="thead"><span>ISIN oder Ticker</span><span>Gewicht %</span><span>Typ</span><span></span></div>
       <div id="rows"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
         <button class="addbtn" onclick="addRow()">+ Position</button>
         <span class="muted" id="wsum" style="font-size:13px"></span>
       </div>
-      <p class="muted" style="font-size:12px;margin-top:8px">Krypto ohne Suffix wird zu <code>-USD</code>
-        (BTC→BTC-USD). EU-Börsen brauchen Suffixe: Xetra <code>.DE</code>, Amsterdam <code>.AS</code>,
-        Wien <code>.VI</code>. Kurse via Yahoo (Fallback Stooq).</p>
+      <p class="muted" style="font-size:12px;margin-top:8px"><b>ISIN</b> (z.B. <code>IE00B4L5Y983</code>)
+        wird automatisch zum Yahoo-Symbol aufgelöst — ideal für dein Broker-Depot. Alternativ direkt
+        ein <b>Yahoo-Ticker</b> (Krypto ohne Suffix → <code>-USD</code>; EU-Börsen: Xetra <code>.DE</code>,
+        Amsterdam <code>.AS</code>, Wien <code>.VI</code>). Kurse via Yahoo (Fallback Stooq).</p>
     </div>
     <div class="controls">
       <div>
@@ -184,7 +185,7 @@ function setMode(m){
 function renderRows(){
   document.getElementById('rows').innerHTML = tickerRows.map((r,i)=>`
     <div class="trow ${r.unresolved?'unresolved':''}">
-      <input placeholder="Ticker" value="${String(r.ticker||'').replace(/"/g,'&quot;')}"
+      <input placeholder="ISIN / Ticker" value="${String(r.ticker||'').replace(/"/g,'&quot;')}"
              oninput="tickerRows[${i}].ticker=this.value;tickerRows[${i}].unresolved=false;this.parentNode.classList.remove('unresolved')">
       <input type="number" step="0.1" placeholder="%" value="${r.weight}"
              oninput="tickerRows[${i}].weight=this.value;updateWsum()">
@@ -224,12 +225,14 @@ async function handleImage(file){
     if(!r.ok) throw new Error(j.message||j.error||'Extraktion fehlgeschlagen');
     const hs=j.holdings||[];
     if(!hs.length){ status.textContent='Keine Positionen erkannt.'+(j.note?(' '+j.note):''); return; }
-    tickerRows=hs.map(h=>({ ticker:h.ticker||'', weight:(h.weight!=null?h.weight:''),
-      type:TYPES.includes(h.type)?h.type:'ETF', unresolved:!!h.unresolved }));
+    // prefer a ticker; else fall back to the ISIN (backend resolves it)
+    tickerRows=hs.map(h=>{ const id=h.ticker||h.isin||'';
+      return { ticker:id, weight:(h.weight!=null?h.weight:''),
+        type:TYPES.includes(h.type)?h.type:'ETF', unresolved:!id }; });
     renderRows();
     const unres=tickerRows.filter(r=>r.unresolved).length;
     status.innerHTML=`✅ ${hs.length} Positionen erkannt.`+
-      (unres?` <b style="color:var(--alert)">${unres} ohne Ticker — rot markierte Zeilen mit Yahoo-Ticker ergänzen.</b>`:'')+
+      (unres?` <b style="color:var(--alert)">${unres} ohne ISIN/Ticker — rot markierte Zeilen ergänzen.</b>`:'')+
       (j.note?`<br><span class="muted">${j.note}</span>`:'');
   }catch(e){ status.innerHTML=`<span style="color:var(--alert)">${e.message}</span>`; }
 }

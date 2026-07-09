@@ -22,6 +22,7 @@ import io
 import json
 import math
 import os
+import re
 import sys
 from http.server import BaseHTTPRequestHandler
 
@@ -81,11 +82,42 @@ _TYPE_MAP = {
 }
 
 
+_ISIN_RE = re.compile(r"[A-Z]{2}[A-Z0-9]{9}[0-9]")
+
+
+def _is_isin(s: str) -> bool:
+    """True if the string is exactly a 12-char ISIN (2 letters + 9 alnum + check digit)."""
+    return bool(_ISIN_RE.fullmatch((s or "").strip().upper()))
+
+
 def _yf_symbol(ticker: str, asset_class: str) -> str:
-    """Display ticker -> Yahoo symbol. Crypto without a pair suffix -> '<T>-USD'."""
+    """Display ticker -> Yahoo symbol. Crypto without a pair suffix -> '<T>-USD'.
+
+    Empty string signals 'needs ISIN resolution' (filled in later, with network).
+    """
+    if _is_isin(ticker):
+        return ""
     if asset_class == "crypto" and "-" not in ticker:
         return f"{ticker}-USD"
     return ticker
+
+
+def _resolve_isin(isin: str, timeout: float = 5.0):
+    """Resolve an ISIN to a Yahoo symbol via Yahoo's search endpoint. None on failure."""
+    import urllib.parse
+    import urllib.request
+
+    url = "https://query1.finance.yahoo.com/v1/finance/search?q=" + urllib.parse.quote(isin)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            quotes = (json.loads(r.read()) or {}).get("quotes") or []
+    except Exception:
+        return None
+    for q in quotes:  # prefer a tradable equity/ETF match
+        if q.get("quoteType") in ("EQUITY", "ETF") and q.get("symbol"):
+            return q["symbol"]
+    return quotes[0].get("symbol") if quotes and quotes[0].get("symbol") else None
 
 
 def _holdings_from_rows(rows: list) -> pd.DataFrame:
@@ -111,6 +143,7 @@ def _holdings_from_rows(rows: list) -> pd.DataFrame:
             "asset_class": asset_class,
             "security_type": r.get("security_type") or st or "etf",
             "name": r.get("name", tkr),
+            "isin": tkr if _is_isin(tkr) else (str(r.get("isin", "") or "").strip().upper()),
             "yf_symbol": _yf_symbol(tkr, asset_class),
         })
     if not recs:
@@ -239,6 +272,22 @@ def _market_data_from_payload(payload: dict, cfg: AnalysisConfig) -> MarketData:
             bench = "URTH"
             warnings.append("Benchmark 'WORLD' existiert nur in den Sample-Daten — "
                             "nutze URTH (MSCI World ETF).")
+
+        # resolve ISIN rows (yf_symbol == "") to Yahoo symbols, time-budgeted
+        pending = list(holdings.index[holdings["yf_symbol"] == ""])
+        if pending:
+            import time
+            start = time.monotonic()
+            for idx in pending:
+                code = holdings.at[idx, "isin"]
+                sym = _resolve_isin(code) if time.monotonic() - start < 12 else None
+                if sym:
+                    holdings.at[idx, "yf_symbol"] = sym
+                    holdings.at[idx, "ticker"] = sym  # show the resolved symbol
+                else:
+                    warnings.append(f"ISIN {code} nicht auflösbar — keine Kurse "
+                                    "(zählt weiter für die Allokation).")
+                    holdings.at[idx, "yf_symbol"] = code  # placeholder, won't match prices
 
         sym_of = dict(zip(holdings["ticker"], holdings["yf_symbol"]))
         all_syms = list(dict.fromkeys(list(holdings["yf_symbol"]) + ([bench] if bench else [])))
