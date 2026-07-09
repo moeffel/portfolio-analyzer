@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Portfoliotheorie für Privatanleger (Österreich) — Research Report</title>
+<style>
+  :root{
+    --bg:#fbfbf9; --surface:#ffffff; --ink:#1a1a1a; --muted:#5c5c5c; --line:#e6e6e2;
+    --accent:#0a6c8f; --link:#0a6c8f;
+    --high:#1b7f4b; --medium:#b9770a; --refuted:#c0392b;
+    --hi-bg:#e8f5ee; --med-bg:#fdf3e2; --ref-bg:#fcebe9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#14151a; --surface:#1d1f26; --ink:#eceef2; --muted:#9aa0ab; --line:#2b2e37;
+           --accent:#4bb7dd; --link:#6fc6e6; --high:#5fcf8b; --medium:#f0b45a; --refuted:#ef7a6d;
+           --hi-bg:#122a1e; --med-bg:#2a2210; --ref-bg:#2c1512; }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:16px/1.65 Georgia,"Times New Roman",serif;}
+  .wrap{max-width:820px;margin:0 auto;padding:44px 22px 90px}
+  h1{font-size:30px;line-height:1.2;letter-spacing:-.01em;margin:0 0 6px}
+  h2{font-size:22px;margin:44px 0 10px;padding-top:10px;border-top:2px solid var(--line);
+     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  h3{font-size:18px;margin:26px 0 6px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  p,li{color:var(--ink)}
+  a{color:var(--link)}
+  .lede{color:var(--muted);font-size:16px}
+  .meta{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+        font-size:13px;color:var(--muted);margin:14px 0 0}
+  .sysfont,nav,.tag,.finding .hd,table,.callout,.toc,figcaption{
+        font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  nav.toc{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+        padding:16px 20px;margin:26px 0;font-size:14px}
+  nav.toc ol{margin:6px 0 0;padding-left:20px}
+  nav.toc a{text-decoration:none}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+       padding:2px 8px;border-radius:999px;vertical-align:middle}
+  .tag.high{background:var(--hi-bg);color:var(--high)}
+  .tag.medium{background:var(--med-bg);color:var(--medium)}
+  .tag.refuted{background:var(--ref-bg);color:var(--refuted)}
+  .finding{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+        padding:4px 20px 16px;margin:18px 0}
+  .finding .hd{display:flex;justify-content:space-between;align-items:center;gap:12px;
+        border-bottom:1px solid var(--line);padding:12px 0 10px;margin-bottom:8px}
+  .finding .hd b{font-size:15px}
+  .vote{font-size:12px;color:var(--muted);white-space:nowrap}
+  sup a{text-decoration:none;font-weight:700;color:var(--accent);padding:0 1px}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:12px 16px;
+        border-radius:0 8px 8px 0;margin:16px 0;font-size:14.5px}
+  .callout.warn{border-left-color:var(--medium)}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;margin:12px 0}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+  .refs{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px}
+  .refs li{margin:10px 0}
+  .refs .q{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;
+        background:var(--line);color:var(--muted);margin-left:6px;text-transform:uppercase}
+  .backlink{font-size:12px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;
+       background:var(--line);padding:1px 5px;border-radius:4px}
+  .foot{margin-top:50px;padding-top:16px;border-top:1px solid var(--line);
+        font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+        font-size:12.5px;color:var(--muted)}
+  hr{border:0;border-top:1px solid var(--line);margin:22px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Portfoliotheorie für Privatanleger (Österreich)</h1>
+  <p class="lede">Ein evidenzbasiertes, quantitatives Rahmenwerk — von der Theorie über Faktoren
+  und Risiko bis zu Krypto. Jede Kernaussage ist adversarial verifiziert und mit Quelle belegt.</p>
+  <p class="meta">Deep-Research-Synthese · Fan-out-Websuche über 6 Suchwinkel · 26 Quellen ·
+  39 extrahierte Behauptungen · 25 verifiziert (3-Stimmen-Voting, 2/3 zum Widerlegen) →
+  <b>22 bestätigt, 3 widerlegt</b>. Stand 2026-07-08.</p>
+
+  <nav class="toc">
+    <b>Inhalt</b>
+    <ol>
+      <li><a href="#method">Methodik &amp; Konfidenz-Legende</a></li>
+      <li><a href="#theory">Theorie &amp; Framework (MPT, CAPM, PMPT)</a></li>
+      <li><a href="#impl">Umsetzung (Passiv vs. aktiv, Core-Satellite)</a></li>
+      <li><a href="#factors">Faktoren &amp; moderne Studien</a></li>
+      <li><a href="#crypto">Alternative Märkte &amp; Krypto-Decoupling</a></li>
+      <li><a href="#refuted">Widerlegte Behauptungen</a></li>
+      <li><a href="#caveats">Vorbehalte &amp; offene Fragen</a></li>
+      <li><a href="#refs">Quellen &amp; Zitate</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="method">1 · Methodik &amp; Konfidenz-Legende</h2>
+  <p>Die Behauptungen wurden aus den Primär-/Sekundärquellen extrahiert und je von drei unabhängigen
+  „Verifizierern" adversarial geprüft (Aufgabe: <em>widerlegen</em>). Eine Behauptung überlebt, wenn
+  weniger als zwei Verifizierer sie kippen. Konfidenz-Tags:</p>
+  <p>
+    <span class="tag high">hoch</span> Primärquelle(n), einstimmig (3-0) bestätigt &nbsp;
+    <span class="tag medium">mittel</span> gespaltenes Votum (2-1) oder schwächere Quelle &nbsp;
+    <span class="tag refuted">widerlegt</span> von den Verifizierern abgelehnt (0-3)
+  </p>
+
+  <h2 id="theory">2 · Theorie &amp; Framework</h2>
+
+  <div class="finding">
+    <div class="hd"><b>Post-Modern Portfolio Theory (PMPT): Downside-Risiko statt Standardabweichung</b>
+      <span class="vote"><span class="tag high">hoch</span> · 3-0 (×4)</span></div>
+    <p>PMPT ersetzt die Markowitz-Mean-Variance-Optimierung durch <b>Downside-Risk-Optimierung</b>:
+    optimiert wird Rendite gegen Downside-Risiko statt gegen Standardabweichung. Begründung:
+    (1) reale Renditen sind asymmetrisch/nicht-normal, Standardabweichung „bestraft" Aufwärtsvolatilität
+    fälschlich; (2) Risiko sollte gegen einen <b>investorspezifischen Benchmark (Minimum Acceptable
+    Return, MAR)</b> gemessen werden, nicht gegen den Verteilungsmittelwert — Kennzahl ist die
+    Sortino-Ratio. In der empirischen Allokationsanalyse der Autoren lieferte ein <b>Value- +
+    Small/Mid-Cap-getiltetes Portfolio die beste risikoadjustierte Rendite</b>, während ein
+    wachstumsgetiltetes unterlegen war.<sup><a href="#r1">[1]</a></sup></p>
+  </div>
+
+  <div class="callout">
+    <b>CAPM-Einschränkung:</b> Die empirische Beta-Rendite-Relation ist flach oder negativ
+    (Low-Volatility-Anomalie / „Betting-Against-Beta") — ein zentraler Grund, warum reine
+    CAPM-Allokation überholt ist.<sup><a href="#r4">[4]</a></sup>
+  </div>
+
+  <h2 id="impl">3 · Konkrete Umsetzung</h2>
+
+  <div class="finding">
+    <div class="hd"><b>Passives Indexing schlägt aktives Management robust</b>
+      <span class="vote"><span class="tag high">hoch</span> · 3-0 (×3)</span></div>
+    <p>Über 15 Jahre schlugen <b>&gt;70 % aktiv gemanagter Fonds ihren Vergleichsindex in 38 von 39
+    SPIVA-Kategorien nicht</b> (Aktien und Anleihen). Die Underperformance-Rate steigt mit dem
+    Messhorizont, und überlegene Vergangenheits-Performance <b>persistiert nicht</b>. →
+    Kern des Portfolios = breite, kostengünstige Index-ETFs.<sup><a href="#r5">[5]</a></sup></p>
+  </div>
+
+  <div class="finding">
+    <div class="hd"><b>Core-Satellite als Umsetzungsrahmen (≈80/20)</b>
+      <span class="vote"><span class="tag medium">mittel</span> · 3-0</span></div>
+    <p>Gängige Faustregel: <b>≈80 % Core</b> (breiter Welt-Index, passiv, günstig; Bandbreite 60–90 %
+    je Anlegertyp) + <b>≈20 % Satellite</b> für gezielte Tilts, Themen — und hier gehört auch Krypto
+    hinein, sauber auf einen kleinen Anteil begrenzt.<sup><a href="#r6">[6]</a></sup></p>
+  </div>
+
+  <h2 id="factors">4 · Moderne Studien &amp; Faktor-Investing</h2>
+
+  <div class="finding">
+    <div class="hd"><b>Faktorprämien verlieren nach Publikation stark an Kraft</b>
+      <span class="vote"><span class="tag high">hoch</span> · 3-0 (×5)</span></div>
+    <p>Untersuchung von <b>97 publizierten Cross-Sectional-Prädiktoren</b>: Portfoliorenditen fallen
+    <b>26 % out-of-sample</b> (Obergrenze für Data-Mining) und <b>58 % post-publication</b>. Die
+    Differenz (~32 %) entspricht publikationsinformiertem Arbitragehandel — Investoren lesen die Paper
+    und handeln die Mispricing weg. Verbleibende Renditen konzentrieren sich in Aktien mit hohem
+    idiosynkratischem Risiko und niedriger Liquidität — also genau dort, wo Privatanleger sie
+    <b>schwer und teuer</b> einfangen.<sup><a href="#r2">[2]</a></sup></p>
+  </div>
+
+  <div class="finding">
+    <div class="hd"><b>Nach Bias-Korrektur überleben Faktorprämien weitgehend — aber umstritten</b>
+      <span class="vote"><span class="tag medium">mittel</span> · 2-1</span></div>
+    <p>Empirical-Bayes-Korrekturen über drei Meta-Studien entfernen nur <b>10–15 %</b> der
+    In-Sample-Rendite via Shrinkage, und die False-Discovery-Rate liegt <b>&lt; 6 %</b>. Wichtig:
+    Die Gegenliteratur ist pessimistischer (Hou-Xue-Zhang „Replicating Anomalies"; Harvey-Liu-Zhu) —
+    das Feld ist <b>akademisch aktiv umstritten</b>. Faktor-Tilts daher als moderate, kostenbewusste
+    Wetten behandeln, nicht als sichere Prämien.<sup><a href="#r3">[3]</a></sup></p>
+  </div>
+
+  <div class="finding">
+    <div class="hd"><b>Fama-French-5-Faktor-Modell: dokumentierte Schwächen</b>
+      <span class="vote"><span class="tag high">hoch</span> · 3-0 (×2)</span></div>
+    <p>(1) Es behält die CAPM-Annahme bei, dass höheres Markt-Beta höhere erwartete Rendite impliziert,
+    obwohl die empirische Relation flach/negativ ist. (2) Es lässt — wie das 3-Faktor-Modell — die
+    <b>Momentum-Prämie aus</b>, obwohl breit dokumentiert (Carhart-4-Faktor als
+    Reaktion).<sup><a href="#r4">[4]</a></sup></p>
+  </div>
+
+  <h2 id="crypto">5 · Alternative Märkte &amp; Krypto</h2>
+
+  <div class="finding">
+    <div class="hd"><b>Bitcoin ist zum integrierten Risiko-Asset geworden — kein Decoupling</b>
+      <span class="vote"><span class="tag medium">mittel</span> · 2-1 / 3-0</span></div>
+    <p>Bitcoin hat sich von einem alternativen/unkorrelierten Asset zu einem integrierten Instrument
+    gewandelt, das sich wie ein Risiko-Asset verhält. Die Korrelation zu großen US-Indizes
+    (Nasdaq 100 / S&amp;P 500) intensivierte sich rund um institutionelle Meilensteine
+    (Spot-Bitcoin-ETFs Jan 2024) und erreichte <b>0,87 in 2024</b>. → <b>Ein dauerhaftes
+    Krypto-Aktien-Decoupling ist empirisch NICHT belegt.</b> (Die <em>Korrelation</em> ist belegt,
+    eine <em>kausale</em> Zuschreibung an ETFs/Institutionen wurde jedoch abgelehnt — siehe
+    <a href="#refuted">§6</a>.)<sup><a href="#r7">[7]</a></sup></p>
+  </div>
+
+  <div class="finding">
+    <div class="hd"><b>Diversifikationsnutzen von Krypto ist bedingt und zeitsensibel</b>
+      <span class="vote"><span class="tag medium">mittel</span> · 3-0 (×4)</span></div>
+    <p>Bitcoin kann unter <b>normalen</b> Marktbedingungen als Diversifikator wirken, aber diese Rolle
+    hält unter <b>extremen</b> Bedingungen nicht (Korrelation → 1 im Stress). Der Nutzen ist stark
+    risikoprofil-abhängig: risikoaverse Anleger sollten das Exposure strikt begrenzen. In
+    MVO-/CVaR-Frameworks verbessert BTC ein gut diversifiziertes Portfolio — Mechanismus: hohe Rendite,
+    hohe Volatilität, (damals) niedrige Korrelation.<sup><a href="#r8">[8]</a></sup><sup><a href="#r9">[9]</a></sup></p>
+  </div>
+
+  <div class="callout warn">
+    <b>Zeit-Caveat (kritisch):</b> Die Diversifikations-Studien nutzen Daten bis ~2021 — <b>vor</b> dem
+    Korrelationsanstieg 2022–2024. Ihre „niedrige Korrelation"-Prämisse ist durch den Befund oben
+    prospektiv geschwächt. Praxis: Krypto als asymmetrische <b>Satellite-Wette (1–5 %)</b>, nicht als
+    Kern-Diversifikator.
+  </div>
+
+  <h2 id="refuted">6 · Widerlegte Behauptungen (0-3 abgelehnt)</h2>
+  <table>
+    <tr><th>Behauptung</th><th>Quelle</th></tr>
+    <tr><td>„Publikationsbias ist <em>nicht</em> dominant; nahezu alle Faktoren replizieren, Prämien
+      sind weitgehend real." — von den Verifizierern abgelehnt.</td><td><a href="#r3">[3]</a></td></tr>
+    <tr><td>„Institutionelle Adoption (ETFs, MicroStrategy) ist der <em>kausale</em> Treiber der
+      höheren BTC-Aktien-Korrelation." — Korrelation ja, Kausalität nicht belegt.</td><td><a href="#r7">[7]</a></td></tr>
+    <tr><td>„McLean &amp; Pontiff fanden nur ~26 % Rückgang → Prämien bleiben weitgehend bestehen."
+      — der korrekte Post-Publication-Wert ist 58 %.</td><td><a href="#r2">[2]</a></td></tr>
+  </table>
+
+  <h2 id="caveats">7 · Vorbehalte &amp; offene Fragen</h2>
+  <ul>
+    <li><b>Österreich-Steuer nicht verifiziert:</b> KESt (27,5 %), Meldefonds vs. Nicht-Meldefonds,
+      UCITS-Besonderheiten und Krypto-Besteuerung (§27b, seit 2022) überstanden die Verifikation nicht
+      (BMF gab HTTP 403; Blogs als unzuverlässig eingestuft). Separat aus Primärquellen (BMF, EStG,
+      OeKB-Meldefondsliste) prüfen.</li>
+    <li><b>Krypto-Zeitsensitivität:</b> Diversifikationsstudien enden ~2021, vor dem Korrelationsanstieg.</li>
+    <li><b>Optimale Krypto-Quote</b> quantitativ (post-2022, nach Kosten) noch offen.</li>
+    <li><b>Einzelne Faktorprämien netto</b> (Value/Size/Momentum/Quality/Low-Vol) für real handelbare
+      UCITS-Faktor-ETFs — angesichts der Konzentration in illiquiden Titeln.</li>
+    <li><b>Quellenqualität variiert:</b> SPIVA-, McLean-Pontiff- und PMPT-Befunde ruhen auf
+      Top-Primärquellen; die Krypto-arXiv-Preprints sind nicht peer-reviewed und teils Single-Author.</li>
+  </ul>
+
+  <h2 id="refs">8 · Quellen &amp; Zitate</h2>
+  <ol class="refs">
+    <li id="r1">Swisher, P. &amp; Kasten, G. W. (2005). <i>Post-Modern Portfolio Theory.</i> Journal of
+      Financial Planning, 18(9). <span class="q">primär</span>
+      <a href="https://www.financialplanningassociation.org/sites/default/files/SEP05%20Swisher.pdf" target="_blank" rel="noopener">PDF</a>
+      &nbsp;<a class="backlink" href="#theory">↩</a></li>
+    <li id="r2">McLean, R. D. &amp; Pontiff, J. (2016). <i>Does Academic Research Destroy Stock Return
+      Predictability?</i> Journal of Finance, 71(1) (Smith-Breeden-Preis). <span class="q">primär</span>
+      <a href="https://www.researchgate.net/publication/254926004_Does_Academic_Research_Destroy_Stock_Return_Predictability" target="_blank" rel="noopener">Paper</a>
+      &nbsp;<a class="backlink" href="#factors">↩</a></li>
+    <li id="r3">Chen, A. Y. &amp; Zimmermann, T. <i>Publication Bias in Asset Pricing Research.</i>
+      Oxford Research Encyclopedia / arXiv:2209.13623. <span class="q">primär</span>
+      <a href="https://arxiv.org/pdf/2209.13623" target="_blank" rel="noopener">arXiv</a>
+      &nbsp;<a class="backlink" href="#factors">↩</a></li>
+    <li id="r4">Blitz, D. (2024). <i>The Fama-French 5-Factor Model: Five Major Concerns.</i> Robeco;
+      Rückführung auf Frazzini &amp; Pedersen (2014) „Betting Against Beta" und Jegadeesh &amp; Titman
+      (1993). <span class="q">sekundär</span>
+      <a href="https://www.robeco.com/en-int/insights/2024/10/fama-french-5-factor-model-five-major-concerns" target="_blank" rel="noopener">Artikel</a>
+      &nbsp;<a class="backlink" href="#factors">↩</a></li>
+    <li id="r5">S&amp;P Dow Jones Indices — <i>SPIVA Scorecard</i> &amp; <i>Persistence Scorecard</i>
+      (survivorship-adjustiert; via BetaShares-Zusammenfassung). <span class="q">sekundär</span>
+      <a href="https://www.betashares.com.au/insights/spiva-report-active-vs-passive/" target="_blank" rel="noopener">SPIVA</a>
+      &nbsp;<a class="backlink" href="#impl">↩</a></li>
+    <li id="r6">justETF — <i>How to implement the Core-Satellite strategy with ETFs.</i>
+      <span class="q">sekundär</span>
+      <a href="https://www.justetf.com/en/news/etf/how-to-implement-the-core-satellite-strategy-with-etfs.html" target="_blank" rel="noopener">Guide</a>
+      &nbsp;<a class="backlink" href="#impl">↩</a></li>
+    <li id="r7">Wu, D. (2025). <i>Institutional Adoption and Correlation Dynamics: Bitcoin's Evolving
+      Role in Financial Markets.</i> arXiv:2501.09911 (Preprint, nicht peer-reviewed).
+      <span class="q">primär (preprint)</span>
+      <a href="https://arxiv.org/pdf/2501.09911" target="_blank" rel="noopener">arXiv</a>
+      &nbsp;<a class="backlink" href="#crypto">↩</a></li>
+    <li id="r8">Journal of Risk and Financial Management (2021), 14(7), 282. <i>Bitcoin als Diversifikator
+      / Safe-Haven-Eigenschaften.</i> MDPI (peer-reviewed). <span class="q">primär</span>
+      <a href="https://www.mdpi.com/1911-8074/14/7/282" target="_blank" rel="noopener">MDPI</a>
+      &nbsp;<a class="backlink" href="#crypto">↩</a></li>
+    <li id="r9">arXiv:2205.00335 — <i>Bitcoin in Mean-Variance/CVaR-Portfoliooptimierung.</i>
+      (Working Paper). <span class="q">primär (working paper)</span>
+      <a href="https://arxiv.org/pdf/2205.00335" target="_blank" rel="noopener">arXiv</a>
+      &nbsp;<a class="backlink" href="#crypto">↩</a></li>
+  </ol>
+
+  <div class="foot">
+    <p>Erzeugt aus einem adversarial verifizierten Deep-Research-Lauf. Zusammenfassung wissenschaftlicher
+    Evidenz, <b>keine Anlageberatung</b>. Steuerliche Aussagen sind informativ und mit Steuerberater/BMF
+    zu verifizieren. Teil des Projekts <a href="./index.html">portfolio-analyzer</a> ·
+    <a href="https://github.com/moeffel/portfolio-analyzer" target="_blank" rel="noopener">GitHub</a>.</p>
+  </div>
+
+</div>
+</body>
+</html>
