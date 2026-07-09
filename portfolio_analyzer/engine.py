@@ -80,15 +80,19 @@ def analyze(data: MarketData, cfg: AnalysisConfig | None = None) -> AnalysisResu
         asset_rets_for_div = R.to_returns(data.prices) if not data.prices.empty else None
         div = P.diversification_summary(weights, asset_rets_for_div)
 
-    # --- factor scores ---
+    # --- factor scores (never let a fundamentals defect kill the whole analysis) ---
     scores = pd.DataFrame()
+    factor_error = None
     if not data.fundamentals.empty:
-        scores = F.factor_scores(
-            data.fundamentals,
-            prices=data.prices if not data.prices.empty else None,
-            weights=cfg.normalized_factor_weights(),
-            periods_per_year=ppy,
-        )
+        try:
+            scores = F.factor_scores(
+                data.fundamentals,
+                prices=data.prices if not data.prices.empty else None,
+                weights=cfg.normalized_factor_weights(),
+                periods_per_year=ppy,
+            )
+        except Exception as e:  # degrade gracefully — keep risk/allocation output
+            factor_error = f"Faktor-Scores übersprungen ({type(e).__name__})."
 
     # --- diagnostics ---
     flags = Rec.diagnose(
@@ -102,6 +106,10 @@ def analyze(data: MarketData, cfg: AnalysisConfig | None = None) -> AnalysisResu
         cfg=cfg,
     )
 
+    meta = {**data.meta, "config_mar": cfg.mar, "config_rf": cfg.risk_free}
+    if factor_error:
+        meta["warnings"] = list(meta.get("warnings") or []) + [factor_error]
+
     return AnalysisResult(
         metrics=metrics,
         benchmark_metrics=benchmark_metrics,
@@ -114,5 +122,5 @@ def analyze(data: MarketData, cfg: AnalysisConfig | None = None) -> AnalysisResu
         flags=flags,
         portfolio_return_series=port_rets,
         equity_curve=equity_curve,
-        meta={**data.meta, "config_mar": cfg.mar, "config_rf": cfg.risk_free},
+        meta=meta,
     )

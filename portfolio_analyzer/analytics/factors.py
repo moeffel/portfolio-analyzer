@@ -28,7 +28,7 @@ FACTOR_CAVEAT = (
 
 def _zscore(s: pd.Series) -> pd.Series:
     """Robust-ish z-score; constant/empty series -> zeros."""
-    s = s.astype(float)
+    s = pd.to_numeric(s, errors="coerce")  # tolerate None/object dtype -> NaN
     valid = s.dropna()
     if len(valid) < 2 or valid.std(ddof=0) == 0:
         return pd.Series(0.0, index=s.index)
@@ -93,6 +93,14 @@ def factor_scores(
     """
     f = fundamentals.copy()
     idx = f.index
+
+    # Live sources (yfinance) return None for fields an ETF/stock lacks, giving
+    # object-dtype columns. Coerce to float up front so None/"" -> NaN and the
+    # arithmetic below (unary -, >0, np.log) never hits a NoneType.
+    for col in ("pe", "pb", "fcf_yield", "roe", "gross_margin",
+                "debt_to_equity", "market_cap", "momentum_12_1", "trailing_vol"):
+        if col in f.columns:
+            f[col] = pd.to_numeric(f[col], errors="coerce")
 
     # --- Value: cheaper = higher score ---
     value_parts = []

@@ -31,6 +31,22 @@ def test_size_favors_small_cap():
     assert scores.loc["SMALL", "size"] > scores.loc["MEGA", "size"]
 
 
+def test_factor_scores_tolerates_none_fundamentals():
+    # yfinance returns None for fields an ETF lacks -> object dtype with None.
+    one = pd.DataFrame({"pe": [None], "debt_to_equity": [None], "market_cap": [None]},
+                       index=["IE00B53SZB19"])
+    s1 = F.factor_scores(one)              # must not raise
+    assert "composite" in s1.columns and len(s1) == 1
+
+    multi = pd.DataFrame(
+        {"pe": [None, 15.0], "pb": [None, 1.4], "roe": [None, 0.2],
+         "debt_to_equity": [None, 0.8], "market_cap": [None, 5e10]},
+        index=["ETF", "STOCK"],
+    )
+    s2 = F.factor_scores(multi)            # mixed None/values, must not raise
+    assert "composite" in s2.columns and len(s2) == 2
+
+
 def test_momentum_from_prices():
     dates = pd.bdate_range("2020-01-01", periods=300)
     up = pd.Series(np.linspace(100, 200, 300), index=dates)
