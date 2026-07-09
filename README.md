@@ -107,9 +107,10 @@ zeigt eine klare Fehlermeldung.
 - **Yahoo drosselt Datacenter-IPs** (Vercel): der Kursabruf kann fehlschlagen →
   automatischer **Stooq-Fallback**; scheitert auch der, gibt es Allokations-/
   Konzentrations-Diagnostik ohne Risikometriken + eine Warnung.
-- **ISIN-Auflösung** nutzt Yahoos Suchendpoint — schlägt sie fehl (Yahoo-Block),
-  zählt die Position weiter für die Allokation, aber ohne Kurse; dann alternativ
-  den Yahoo-Ticker direkt eintragen.
+- **ISIN-Auflösung** nutzt primär **OpenFIGI** (datacenter-freundlich, keyless;
+  optional `OPENFIGI_API_KEY` für höheres Rate-Limit), mit Yahoo-Suche nur als
+  Notnagel. Schlägt beides fehl, zählt die Position weiter für die Allokation,
+  aber ohne Kurse; dann alternativ den Yahoo-Ticker direkt eintragen.
 - **Function-Timeout:** „Fundamentals immer" macht viele Netzwerk-Calls. Bei 504
   in Vercel → Project → Settings → **Functions → Max Duration** auf 60 s anheben.
 - **Lambda-Größe:** yfinance-Deps (curl_cffi) liegen bei ~211 MB entpackt (Limit

@@ -80,6 +80,27 @@ def test_holdings_isin_row_pending_resolution():
     assert row["ticker"] == "IE00B4L5Y983"
 
 
+def test_figi_to_yahoo_suffixes():
+    assert analyze._figi_to_yahoo("NKE", "US") == "NKE"        # US -> no suffix
+    assert analyze._figi_to_yahoo("EUNL", "GY") == "EUNL.DE"   # Xetra
+    assert analyze._figi_to_yahoo("IWDA", "NA") == "IWDA.AS"   # Amsterdam
+    assert analyze._figi_to_yahoo("BRK/B", "US") == "BRK-B"    # share class -> '-'
+    assert analyze._figi_to_yahoo("X", "ZZ") is None           # unknown exchange
+    assert analyze._figi_to_yahoo(None, "US") is None
+
+
+def test_pick_listing_prefers_us_then_xetra():
+    data = [
+        {"ticker": "EUNL", "exchCode": "GY"},
+        {"ticker": "NKE", "exchCode": "US"},
+        {"ticker": "IWDA", "exchCode": "NA"},
+    ]
+    assert analyze._pick_listing(data)["exchCode"] == "US"
+    data2 = [{"ticker": "EUNL", "exchCode": "GY"}, {"ticker": "IWDA", "exchCode": "NA"}]
+    assert analyze._pick_listing(data2)["exchCode"] == "GY"
+    assert analyze._pick_listing([{"ticker": "X", "exchCode": "ZZ"}]) is None
+
+
 # --- extract: vision tool-use parsing -----------------------------------------
 
 def _tool_resp(holdings, note=None):

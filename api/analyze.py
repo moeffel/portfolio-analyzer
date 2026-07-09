@@ -102,8 +102,80 @@ def _yf_symbol(ticker: str, asset_class: str) -> str:
     return ticker
 
 
-def _resolve_isin(isin: str, timeout: float = 5.0):
-    """Resolve an ISIN to a Yahoo symbol via Yahoo's search endpoint. None on failure."""
+# OpenFIGI exchange code -> Yahoo symbol suffix. US venues take no suffix.
+_EXCH_SUFFIX = {
+    "US": "", "UN": "", "UW": "", "UQ": "", "UA": "", "UP": "", "UR": "", "UV": "", "PQ": "", "UD": "",
+    "GY": ".DE", "GR": ".DE", "GF": ".F", "GM": ".MU", "GS": ".SG", "GD": ".DU", "GB": ".BE",
+    "NA": ".AS", "AV": ".VI", "LN": ".L", "FP": ".PA", "IM": ".MI", "SM": ".MC",
+    "SW": ".SW", "VX": ".SW", "SE": ".SW", "SS": ".ST", "DC": ".CO", "NO": ".OL", "FH": ".HE",
+    "PL": ".LS", "BB": ".BR", "ID": ".IR", "CN": ".TO", "CT": ".TO", "JP": ".T", "JT": ".T",
+    "HK": ".HK", "AU": ".AX", "AT": ".AX", "NZ": ".NZ", "SP": ".SI",
+}
+# preferred listing order when an ISIN maps to several exchanges (US first, then Xetra, then EU)
+_PREFERRED_EXCH = ["US", "UW", "UN", "UQ", "UA", "GY", "GR", "NA", "LN", "IM", "SW", "FP", "AV", "SM", "SS"]
+
+
+def _figi_to_yahoo(ticker, exch):
+    """OpenFIGI (ticker, exchCode) -> Yahoo symbol, or None if the exchange is unmapped."""
+    if not ticker:
+        return None
+    suffix = _EXCH_SUFFIX.get((exch or "").upper())
+    if suffix is None:
+        return None
+    return ticker.replace("/", "-").replace(" ", "-") + suffix
+
+
+def _pick_listing(data):
+    """From OpenFIGI's per-exchange listings, pick the most Yahoo-friendly one."""
+    best, best_rank = None, 10_000
+    for d in data:
+        exch = (d.get("exchCode") or "").upper()
+        if exch not in _EXCH_SUFFIX:
+            continue
+        rank = _PREFERRED_EXCH.index(exch) if exch in _PREFERRED_EXCH else 500
+        if rank < best_rank:
+            best, best_rank = d, rank
+    return best
+
+
+def _resolve_isins_openfigi(isins: list, timeout: float = 8.0) -> dict:
+    """Batch-resolve ISINs -> Yahoo symbols via OpenFIGI (datacenter-friendly, keyless).
+
+    Returns {isin: yahoo_symbol} for those that mapped. OPENFIGI_API_KEY (optional)
+    raises the rate limit.
+    """
+    import urllib.request
+
+    isins = list(dict.fromkeys(isins))
+    if not isins:
+        return {}
+    headers = {"Content-Type": "application/json"}
+    key = os.environ.get("OPENFIGI_API_KEY")
+    if key:
+        headers["X-OPENFIGI-APIKEY"] = key
+    out = {}
+    for i in range(0, len(isins), 10):  # keyless limit: 10 jobs per request
+        chunk = isins[i:i + 10]
+        body = json.dumps([{"idType": "ID_ISIN", "idValue": x} for x in chunk]).encode("utf-8")
+        try:
+            req = urllib.request.Request("https://api.openfigi.com/v3/mapping",
+                                         data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                results = json.loads(r.read())
+        except Exception:
+            continue
+        for isin, res in zip(chunk, results):
+            data = (res or {}).get("data") or []
+            best = _pick_listing(data)
+            if best:
+                sym = _figi_to_yahoo(best.get("ticker"), best.get("exchCode"))
+                if sym:
+                    out[isin] = sym
+    return out
+
+
+def _resolve_isin(isin: str, timeout: float = 3.0):
+    """Secondary resolver: Yahoo search (often blocked on datacenter IPs). None on failure."""
     import urllib.parse
     import urllib.request
 
@@ -114,7 +186,7 @@ def _resolve_isin(isin: str, timeout: float = 5.0):
             quotes = (json.loads(r.read()) or {}).get("quotes") or []
     except Exception:
         return None
-    for q in quotes:  # prefer a tradable equity/ETF match
+    for q in quotes:
         if q.get("quoteType") in ("EQUITY", "ETF") and q.get("symbol"):
             return q["symbol"]
     return quotes[0].get("symbol") if quotes and quotes[0].get("symbol") else None
@@ -273,14 +345,17 @@ def _market_data_from_payload(payload: dict, cfg: AnalysisConfig) -> MarketData:
             warnings.append("Benchmark 'WORLD' existiert nur in den Sample-Daten — "
                             "nutze URTH (MSCI World ETF).")
 
-        # resolve ISIN rows (yf_symbol == "") to Yahoo symbols, time-budgeted
+        # resolve ISIN rows (yf_symbol == "") to Yahoo symbols
         pending = list(holdings.index[holdings["yf_symbol"] == ""])
         if pending:
-            import time
-            start = time.monotonic()
+            resolved = _resolve_isins_openfigi([holdings.at[i, "isin"] for i in pending])
+            yahoo_tries = 0
             for idx in pending:
                 code = holdings.at[idx, "isin"]
-                sym = _resolve_isin(code) if time.monotonic() - start < 12 else None
+                sym = resolved.get(code)
+                if not sym and not resolved and yahoo_tries < 3:  # OpenFIGI down -> bounded Yahoo
+                    sym = _resolve_isin(code)
+                    yahoo_tries += 1
                 if sym:
                     holdings.at[idx, "yf_symbol"] = sym
                     holdings.at[idx, "ticker"] = sym  # show the resolved symbol
