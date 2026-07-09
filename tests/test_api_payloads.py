@@ -132,3 +132,29 @@ def test_extract_derives_weight_from_value():
 def test_extract_no_tool_block():
     r = extract._normalize(extract._parse_tool_result({"content": [{"type": "text", "text": "hi"}]}))
     assert r["holdings"] == [] and r["note"]
+
+
+# --- ETF look-through aggregation (pure) --------------------------------------
+
+def test_lookthrough_aggregates_weights_sectors_coverage():
+    import pandas as pd
+    holdings = pd.DataFrame([
+        {"ticker": "ETFA", "value": 0.5, "asset_class": "equity", "security_type": "etf", "name": "ETF A"},
+        {"ticker": "ETFB", "value": 0.3, "asset_class": "equity", "security_type": "etf", "name": "ETF B"},
+        {"ticker": "MSFT", "value": 0.2, "asset_class": "equity", "security_type": "stock", "name": "Microsoft"},
+    ])
+    per_etf = {
+        "ETFA": {"holdings": [{"symbol": "AAPL", "name": "Apple", "weight": 0.10},
+                              {"symbol": "NVDA", "name": "Nvidia", "weight": 0.05}],
+                 "sectors": {"Technology": 0.8, "Health": 0.2}},
+        "ETFB": {"holdings": [{"symbol": "AAPL", "name": "Apple", "weight": 0.20}],
+                 "sectors": {"Technology": 1.0}},
+    }
+    lt = analyze._aggregate_lookthrough(holdings, per_etf)
+    top = {t["symbol"]: t["weight"] for t in lt["top"]}
+    assert abs(top["AAPL"] - (0.5 * 0.10 + 0.3 * 0.20)) < 1e-9   # overlap sums: 0.11
+    assert abs(top["NVDA"] - 0.5 * 0.05) < 1e-9                  # 0.025
+    assert abs(top["MSFT"] - 0.2) < 1e-9                         # direct stock = itself
+    assert abs(lt["sectors"]["Technology"] - (0.5 * 0.8 + 0.3 * 1.0)) < 1e-9  # 0.7
+    assert abs(lt["coverage"] - (0.5 * 0.15 + 0.3 * 0.20 + 0.2)) < 1e-9       # 0.335
+    assert lt["top"][0]["weight"] >= lt["top"][-1]["weight"]     # sorted desc

@@ -323,6 +323,68 @@ def _fetch_fundamentals(holdings: pd.DataFrame, warnings: list,
     return df
 
 
+def _fetch_etf_holdings(symbol: str):
+    """yfinance funds_data -> (holdings_list, sectors_dict) for one ETF.
+
+    holdings_list = [{symbol, name, weight}] from top_holdings (weight as a
+    fraction). Empty/failed funds -> ([], {}). Yahoo only exposes ~top 10.
+    """
+    try:
+        import yfinance as yf
+        fd = yf.Ticker(symbol).funds_data
+        top = fd.top_holdings
+        sectors = dict(fd.sector_weightings or {})
+    except Exception:
+        return [], {}
+    out = []
+    try:
+        for sym, row in top.iterrows():
+            w = float(row.get("Holding Percent", 0) or 0)
+            if w > 1.0:            # some responses give percent, not fraction
+                w /= 100.0
+            out.append({"symbol": str(sym), "name": str(row.get("Name", sym)), "weight": w})
+    except Exception:
+        return [], sectors
+    # normalise sector weights to fractions too
+    sectors = {k: (v / 100.0 if v and v > 1.0 else float(v or 0)) for k, v in sectors.items()}
+    return out, sectors
+
+
+def _aggregate_lookthrough(holdings: pd.DataFrame, per_etf: dict) -> dict:
+    """Combine per-ETF top holdings (weighted by portfolio weight) into an
+    effective single-name and sector exposure. Direct stocks count as themselves.
+
+    per_etf: {etf_ticker: {"holdings": [...], "sectors": {...}}}. Returns
+    {top:[{symbol,name,weight}] desc, sectors:{...}, coverage: disclosed weight}.
+    """
+    effective, names, sectors = {}, {}, {}
+    coverage = 0.0
+    for _, h in holdings.iterrows():
+        w = float(h["value"])                       # portfolio weight (Σ=1)
+        tkr = h["ticker"]
+        if tkr in per_etf and per_etf[tkr]["holdings"]:
+            disclosed = 0.0
+            for u in per_etf[tkr]["holdings"]:
+                key = (u.get("symbol") or u.get("name") or "").upper() or u.get("name")
+                eff = w * float(u["weight"])
+                effective[key] = effective.get(key, 0.0) + eff
+                names.setdefault(key, u.get("name") or key)
+                disclosed += float(u["weight"])
+            coverage += w * min(disclosed, 1.0)
+            for s, sw in per_etf[tkr]["sectors"].items():
+                sectors[s] = sectors.get(s, 0.0) + w * float(sw)
+        elif h["asset_class"] == "equity" and h["security_type"] == "stock":
+            key = tkr.upper()
+            effective[key] = effective.get(key, 0.0) + w
+            names.setdefault(key, h.get("name") or tkr)
+            coverage += w
+    top = sorted(
+        ({"symbol": k, "name": names[k], "weight": v} for k, v in effective.items()),
+        key=lambda d: d["weight"], reverse=True,
+    )[:15]
+    return {"top": top, "sectors": sectors, "coverage": coverage}
+
+
 def _market_data_from_payload(payload: dict, cfg: AnalysisConfig) -> MarketData:
     mode = payload.get("mode", "sample")
     if mode == "sample":
@@ -390,11 +452,35 @@ def _market_data_from_payload(payload: dict, cfg: AnalysisConfig) -> MarketData:
 
         fundamentals = _fetch_fundamentals(holdings, warnings)
 
+        # --- ETF look-through: top holdings + sectors per ETF, then aggregate ---
+        per_etf, breakdown = {}, []
+        if payload.get("lookthrough", True):
+            import time
+            etfs = holdings[(holdings["security_type"] == "etf")
+                            & (holdings["asset_class"].isin(["equity", "bond"]))]
+            start, attempted, skipped = time.monotonic(), 0, 0
+            for _, h in etfs.iterrows():
+                if attempted >= 15:
+                    break
+                if time.monotonic() - start > 12:
+                    skipped += 1
+                    continue
+                hlds, sectors = _fetch_etf_holdings(h["yf_symbol"])
+                attempted += 1
+                if hlds:
+                    per_etf[h["ticker"]] = {"holdings": hlds, "sectors": sectors}
+                    breakdown.append({"ticker": h["ticker"], "name": h.get("name", h["ticker"]),
+                                      "holdings": hlds, "sectors": sectors})
+            if skipped:
+                warnings.append(f"Zeitbudget erreicht — ETF-Durchschau für {skipped} ETF(s) übersprungen.")
+        lookthrough = _aggregate_lookthrough(holdings, per_etf) if per_etf or not holdings.empty else {}
+
         return MarketData(
             prices=prices if not prices.empty else pd.DataFrame(),
             fundamentals=fundamentals, holdings=holdings,
             benchmark_prices=benchmark_prices,
-            meta={"source": f"tickers ({source})", "warnings": warnings},
+            meta={"source": f"tickers ({source})", "warnings": warnings,
+                  "period": period, "etf_breakdown": breakdown, "lookthrough": lookthrough},
         )
 
     holdings_csv = payload.get("holdings_csv")
@@ -452,9 +538,20 @@ def _serialize(result, cfg) -> dict:
         corr = {"tickers": list(result.correlation.columns),
                 "matrix": [[_clean(v) for v in r] for r in result.correlation.values]}
 
+    lt = result.meta.get("lookthrough") or {}
+    lookthrough = {}
+    if lt.get("top") or lt.get("sectors"):
+        lookthrough = {
+            "top": [{"symbol": t["symbol"], "name": t["name"], "weight": _clean(t["weight"])}
+                    for t in lt.get("top", [])],
+            "sectors": {k: _clean(v) for k, v in (lt.get("sectors") or {}).items()},
+            "coverage": _clean(lt.get("coverage")),
+        }
+
     return {
         "meta": {"source": result.meta.get("source"), "synthetic": bool(result.meta.get("synthetic")),
                  "n_obs": m.get("n_obs"), "mar": cfg.mar, "risk_free": cfg.risk_free,
+                 "period": result.meta.get("period"),
                  "warnings": [w for w in (result.meta.get("warnings") or []) if w]},
         "metrics": m,
         "benchmark_metrics": bm,
@@ -464,6 +561,8 @@ def _serialize(result, cfg) -> dict:
         "correlation": corr,
         "equity_curve": equity,
         "flags": [f.as_dict() for f in result.flags],
+        "etf_breakdown": result.meta.get("etf_breakdown") or [],
+        "lookthrough": lookthrough,
     }
 
 

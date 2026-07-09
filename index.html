@@ -28,8 +28,13 @@
   .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;align-items:end}
   label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600;
         text-transform:uppercase;letter-spacing:.04em}
-  input[type=text],input[type=number]{width:100%;padding:9px 10px;border:1px solid var(--line);
+  input[type=text],input[type=number],.controls select{width:100%;padding:9px 10px;border:1px solid var(--line);
         border-radius:8px;background:var(--bg);color:var(--ink);font-size:14px}
+  details.etf{border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin:8px 0;background:var(--bg)}
+  details.etf summary{font-weight:600;font-size:14px}
+  .sectorlist{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .sectorlist span{font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+  .cov{font-size:13px;color:var(--muted);margin-bottom:10px}
   input[type=range]{width:100%}
   .rangeval{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600}
   .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
@@ -137,6 +142,17 @@
         <label>Krypto-Limit <span class="rangeval" id="mcV">5%</span></label>
         <input type="range" id="mc" min="0" max="0.2" step="0.01" value="0.05" oninput="mcV.textContent=(this.value*100).toFixed(0)+'%'">
       </div>
+      <div>
+        <label>Zeitraum</label>
+        <select id="period">
+          <option value="1y">1 Jahr</option>
+          <option value="2y">2 Jahre</option>
+          <option value="3y">3 Jahre</option>
+          <option value="5y" selected>5 Jahre</option>
+          <option value="10y">10 Jahre</option>
+          <option value="max">Max</option>
+        </select>
+      </div>
       <div><label>Benchmark-Ticker</label><input type="text" id="bench" value="WORLD"></div>
       <div><button class="primary" id="run" onclick="run()">Analysieren</button></div>
     </div>
@@ -155,6 +171,15 @@
         <p class="muted" style="font-size:12px">z-normierte Tilt-Rankings, keine Kaufsignale. Prämien
         verlieren ~26–58% nach Publikation (McLean &amp; Pontiff 2016).</p></div>
       <div class="card"><h2>Korrelationsmatrix</h2><div id="corr" class="muted">—</div></div>
+    </div>
+    <div class="card" id="ltCard" style="display:none">
+      <h2>Portfolio-Durchschau (ETF Look-Through)</h2>
+      <div class="cov" id="ltCov"></div>
+      <div class="grid2">
+        <div><canvas id="ltNames" height="230"></canvas></div>
+        <div><canvas id="ltSectors" height="230"></canvas></div>
+      </div>
+      <div id="ltEtfs" style="margin-top:8px"></div>
     </div>
     <div class="card"><h2>Alle Kennzahlen</h2><div id="metricsTable"></div></div>
   </div>
@@ -266,6 +291,7 @@ async function run(){
         .map(r=>({ticker:String(r.ticker).trim(), weight:parseFloat(r.weight), type:r.type}));
       if(!rows.length) throw new Error('Mindestens eine Zeile mit Ticker und Gewicht > 0.');
       body.holdings=rows;
+      body.period=document.getElementById('period').value;
       btn.textContent='Hole Kurse…';
     }
     const r = await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -308,8 +334,10 @@ function render(j){
   drawAlloc(j.allocation_drift);
   drawFactors(j.factor_scores);
   drawCorr(j.correlation);
+  drawLookthrough(j);
   metricsTable.innerHTML = metricsTableHTML(m, bm);
-  foot.innerHTML = `Quelle: <code>${j.meta.source}</code> · MAR ${pct(j.meta.mar)} · n=${j.meta.n_obs||0} · `+
+  foot.innerHTML = `Quelle: <code>${j.meta.source}</code> · Zeitraum ${j.meta.period||'—'} · `+
+    `MAR ${pct(j.meta.mar)} · n=${j.meta.n_obs||0} · `+
     `Kein Backtester/Optimierer. Steuerhinweise mit Steuerberater/BMF verifizieren.`;
 }
 
@@ -355,6 +383,42 @@ function drawCorr(corr){
   corr.matrix.forEach((row,i)=>{ h+=`<tr><th>${corr.tickers[i]}</th>`+
     row.map(v=>`<td style="background:${cell(v)}">${v.toFixed(2)}</td>`).join('')+'</tr>'; });
   document.getElementById('corr').innerHTML=h+'</table>';
+}
+const SECTOR_COLORS=['#0072B2','#E69F00','#009E73','#D55E00','#CC79A7','#56B4E9','#F0E442','#8c564b','#17becf','#bcbd22','#999999'];
+function drawLookthrough(j){
+  const lt=j.lookthrough||{}, brk=j.etf_breakdown||[];
+  const card=document.getElementById('ltCard');
+  if(!(lt.top&&lt.top.length) && !brk.length){ card.style.display='none'; return; }
+  card.style.display='block';
+  const cov=lt.coverage!=null?lt.coverage*100:null;
+  document.getElementById('ltCov').innerHTML = cov!=null
+    ? `Durchschau deckt <b>${cov.toFixed(0)}%</b> des Portfolios ab — nur die von Yahoo offengelegten Top-Positionen je ETF; der Rest ist nicht aufgeschlüsselt.`
+    : '';
+  if(lt.top&&lt.top.length){
+    const labels=lt.top.map(t=>t.name.length>24?t.name.slice(0,24)+'…':t.name);
+    charts.ltNames=new Chart(fresh('ltNames'),{type:'bar',
+      data:{labels,datasets:[{label:'Effektives Gewicht',data:lt.top.map(t=>t.weight*100),backgroundColor:C.blue,borderRadius:4}]},
+      options:{...baseOpts,indexAxis:'y',plugins:{legend:{display:false},
+        title:{display:true,text:'Effektives Einzelaktien-Exposure (nur offengelegter Teil)',color:inkColor}},
+        scales:{x:{grid:{color:gridColor},ticks:{color:inkColor,callback:v=>v+'%'}},y:{grid:{display:false},ticks:{color:inkColor}}}}});
+  } else { fresh('ltNames'); }
+  const secs=Object.entries(lt.sectors||{}).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  if(secs.length){
+    charts.ltSectors=new Chart(fresh('ltSectors'),{type:'doughnut',
+      data:{labels:secs.map(s=>s[0]),datasets:[{data:secs.map(s=>s[1]*100),
+        backgroundColor:secs.map((_,i)=>SECTOR_COLORS[i%SECTOR_COLORS.length]),borderWidth:1,borderColor:gridColor}]},
+      options:{responsive:true,plugins:{title:{display:true,text:'Sektor-Mix (Look-Through)',color:inkColor},
+        legend:{position:'right',labels:{color:inkColor,boxWidth:12,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>c.label+': '+c.parsed.toFixed(1)+'%'}}}}});
+  } else { fresh('ltSectors'); }
+  document.getElementById('ltEtfs').innerHTML = brk.map(e=>{
+    const rows=(e.holdings||[]).map(h=>`<tr><td>${h.name}</td><td>${(h.weight*100).toFixed(1)}%</td></tr>`).join('');
+    const es=Object.entries(e.sectors||{}).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1])
+      .map(([k,v])=>`<span>${k} ${(v*100).toFixed(0)}%</span>`).join('');
+    return `<details class="etf"><summary>${e.name||e.ticker} — Top-Holdings</summary>
+      <table><tr><th>Position</th><th>Gewicht im ETF</th></tr>${rows}</table>
+      ${es?`<div class="sectorlist">${es}</div>`:''}</details>`;
+  }).join('');
 }
 function metricsTableHTML(m,bm){
   const rows=[['Ann. Rendite',pct(m.annualized_return),pct(bm.annualized_return)],

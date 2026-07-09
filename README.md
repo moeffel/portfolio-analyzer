@@ -92,6 +92,14 @@ Claude-Vision (forced Tool-Use) Ticker + Gewichte extrahiert und die editierbare
 Tabelle vorbefüllt (human-in-the-loop). Zeilen ohne erkannten Ticker werden rot
 markiert und müssen ergänzt werden (ISINs ↦ Yahoo-Ticker sind nicht 1:1).
 
+**ETF-Durchschau (Look-Through):** Für jede ETF-Position werden via
+`yfinance funds_data` die Top-Holdings + Sektoren geholt und (a) **pro ETF**
+aufklappbar sowie (b) **aggregiert** über alle ETFs dargestellt — effektives
+Einzelaktien-Exposure (gewichtet; Direktaktien zählen als sich selbst) + Sektor-Mix.
+Yahoo legt nur die **Top-~10** je ETF offen → die Card weist die abgedeckte
+**Coverage** transparent aus. **Zeitraum** (1y–max) ist im UI umstellbar und steuert
+Kursabruf + alle Kennzahlen.
+
 ### Umgebungsvariablen (Vercel → Project → Settings → Environment Variables)
 
 | Variable | Zweck | Pflicht |
