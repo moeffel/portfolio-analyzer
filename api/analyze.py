@@ -174,16 +174,12 @@ def _resolve_isins_openfigi(isins: list, timeout: float = 8.0) -> dict:
     return out
 
 
-def _resolve_isin(isin: str, timeout: float = 3.0):
-    """Secondary resolver: Yahoo search (often blocked on datacenter IPs). None on failure."""
-    import urllib.parse
-    import urllib.request
-
-    url = "https://query1.finance.yahoo.com/v1/finance/search?q=" + urllib.parse.quote(isin)
+def _resolve_isin_yf(isin: str):
+    """Secondary resolver via yfinance's own Search — shares the session that Yahoo
+    price downloads use (so it works wherever yf.download works). None on failure."""
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            quotes = (json.loads(r.read()) or {}).get("quotes") or []
+        import yfinance as yf
+        quotes = yf.Search(isin, max_results=5, news_count=0, lists_count=0).quotes or []
     except Exception:
         return None
     for q in quotes:
@@ -345,23 +341,24 @@ def _market_data_from_payload(payload: dict, cfg: AnalysisConfig) -> MarketData:
             warnings.append("Benchmark 'WORLD' existiert nur in den Sample-Daten — "
                             "nutze URTH (MSCI World ETF).")
 
-        # resolve ISIN rows (yf_symbol == "") to Yahoo symbols
+        # resolve ISIN rows (yf_symbol == "") to Yahoo symbols:
+        # OpenFIGI batch first, then yfinance-Search per unresolved (bounded).
         pending = list(holdings.index[holdings["yf_symbol"] == ""])
         if pending:
             resolved = _resolve_isins_openfigi([holdings.at[i, "isin"] for i in pending])
-            yahoo_tries = 0
+            yf_tries = 0
             for idx in pending:
                 code = holdings.at[idx, "isin"]
                 sym = resolved.get(code)
-                if not sym and not resolved and yahoo_tries < 3:  # OpenFIGI down -> bounded Yahoo
-                    sym = _resolve_isin(code)
-                    yahoo_tries += 1
+                if not sym and yf_tries < 10:
+                    sym = _resolve_isin_yf(code)
+                    yf_tries += 1
                 if sym:
                     holdings.at[idx, "yf_symbol"] = sym
                     holdings.at[idx, "ticker"] = sym  # show the resolved symbol
                 else:
-                    warnings.append(f"ISIN {code} nicht auflösbar — keine Kurse "
-                                    "(zählt weiter für die Allokation).")
+                    warnings.append(f"ISIN {code} nicht auflösbar (evtl. ein Index oder nicht "
+                                    "handelbares Papier) — keine Kurse, zählt aber für die Allokation.")
                     holdings.at[idx, "yf_symbol"] = code  # placeholder, won't match prices
 
         sym_of = dict(zip(holdings["ticker"], holdings["yf_symbol"]))
