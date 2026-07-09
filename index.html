@@ -67,6 +67,20 @@
   canvas{max-width:100%}
   .foot{color:var(--muted);font-size:12px;margin-top:24px;line-height:1.6}
   .err{color:#fff;background:var(--alert);padding:10px 14px;border-radius:9px}
+  .thead,.trow{display:grid;grid-template-columns:1.5fr 0.8fr 1fr 34px;gap:8px;align-items:center}
+  .thead{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-bottom:6px}
+  .trow{margin-bottom:8px}
+  .trow input,.trow select{width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:8px;
+        background:var(--bg);color:var(--ink);font-size:14px}
+  .trow.unresolved input:first-child{border-color:var(--alert);background:#fff0ee}
+  @media(prefers-color-scheme:dark){.trow.unresolved input:first-child{background:#2c1512}}
+  .xbtn{border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:8px;
+        cursor:pointer;height:36px;font-size:16px;line-height:1}
+  .addbtn{border:1px dashed var(--line);background:transparent;color:var(--blue);border-radius:8px;
+        padding:8px 14px;cursor:pointer;font-weight:600;font-size:14px}
+  .drop{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center;color:var(--muted);
+        cursor:pointer;font-size:14px;margin-bottom:12px}
+  .drop.hot{border-color:var(--blue);color:var(--blue)}
 </style>
 </head>
 <body>
@@ -81,7 +95,8 @@
   <div class="card">
     <div style="margin-bottom:14px">
       <span class="seg" role="group" aria-label="Datenquelle">
-        <button id="mSample" aria-pressed="true" onclick="setMode('sample')">Sample (synthetisch)</button>
+        <button id="mTickers" aria-pressed="false" onclick="setMode('tickers')">Ticker + Gewichte</button>
+        <button id="mSample" aria-pressed="true" onclick="setMode('sample')">Sample</button>
         <button id="mCsv" aria-pressed="false" onclick="setMode('csv')">CSV-Upload</button>
       </span>
     </div>
@@ -91,6 +106,22 @@
         <div><label>prices.csv (optional)</label><input type="file" id="fPrices" accept=".csv"></div>
         <div><label>fundamentals.csv (optional)</label><input type="file" id="fFund" accept=".csv"></div>
       </div>
+    </div>
+    <div id="tickerInputs" style="display:none;margin-bottom:14px">
+      <div class="drop" id="drop">
+        📷 <b>Depot-Screenshot hochladen</b> — Ticker &amp; Gewichte werden per KI erkannt; du prüfst danach.
+        <input type="file" id="imgFile" accept="image/*" style="display:none">
+      </div>
+      <div id="imgStatus" class="muted" style="font-size:13px;margin-bottom:10px"></div>
+      <div class="thead"><span>Ticker (Yahoo, z.B. AAPL, IWDA.AS, BTC)</span><span>Gewicht %</span><span>Typ</span><span></span></div>
+      <div id="rows"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <button class="addbtn" onclick="addRow()">+ Position</button>
+        <span class="muted" id="wsum" style="font-size:13px"></span>
+      </div>
+      <p class="muted" style="font-size:12px;margin-top:8px">Krypto ohne Suffix wird zu <code>-USD</code>
+        (BTC→BTC-USD). EU-Börsen brauchen Suffixe: Xetra <code>.DE</code>, Amsterdam <code>.AS</code>,
+        Wien <code>.VI</code>. Kurse via Yahoo (Fallback Stooq).</p>
     </div>
     <div class="controls">
       <div>
@@ -134,13 +165,85 @@
 const C = { blue:'#0072B2', orange:getComputedStyle(document.documentElement).getPropertyValue('--orange').trim()||'#c77f00',
             green:'#009E73', red:'#D55E00', gray:'#9aa0ab' };
 let MODE='sample', charts={};
+const TYPES=['ETF','Aktie','Krypto','Anleihe','Gold','Cash'];
+let tickerRows=[{ticker:'',weight:'',type:'ETF'},{ticker:'',weight:'',type:'ETF'},{ticker:'',weight:'',type:'Krypto'}];
 
 function setMode(m){
   MODE=m;
+  mTickers.setAttribute('aria-pressed', m==='tickers');
   mSample.setAttribute('aria-pressed', m==='sample');
   mCsv.setAttribute('aria-pressed', m==='csv');
   csvInputs.style.display = m==='csv' ? 'block' : 'none';
+  tickerInputs.style.display = m==='tickers' ? 'block' : 'none';
+  const b=document.getElementById('bench');           // sensible benchmark per mode
+  if(m==='sample' && b.value.trim()==='URTH') b.value='WORLD';
+  if(m!=='sample' && b.value.trim()==='WORLD') b.value='URTH';
+  if(m==='tickers') renderRows();
 }
+
+function renderRows(){
+  document.getElementById('rows').innerHTML = tickerRows.map((r,i)=>`
+    <div class="trow ${r.unresolved?'unresolved':''}">
+      <input placeholder="Ticker" value="${String(r.ticker||'').replace(/"/g,'&quot;')}"
+             oninput="tickerRows[${i}].ticker=this.value;tickerRows[${i}].unresolved=false;this.parentNode.classList.remove('unresolved')">
+      <input type="number" step="0.1" placeholder="%" value="${r.weight}"
+             oninput="tickerRows[${i}].weight=this.value;updateWsum()">
+      <select onchange="tickerRows[${i}].type=this.value">${TYPES.map(t=>`<option ${r.type===t?'selected':''}>${t}</option>`).join('')}</select>
+      <button class="xbtn" title="Entfernen" onclick="removeRow(${i})">×</button>
+    </div>`).join('');
+  updateWsum();
+}
+function updateWsum(){
+  const s=tickerRows.reduce((a,r)=>a+(parseFloat(r.weight)||0),0);
+  document.getElementById('wsum').textContent=`Summe: ${s.toFixed(1)}% (wird auf 100% normiert)`;
+}
+function addRow(){ tickerRows.push({ticker:'',weight:'',type:'ETF'}); renderRows(); }
+function removeRow(i){ tickerRows.splice(i,1); if(!tickerRows.length) tickerRows.push({ticker:'',weight:'',type:'ETF'}); renderRows(); }
+
+function downscale(file, maxEdge=1568, quality=0.85){
+  return new Promise((res,rej)=>{
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{ let w=img.width,h=img.height; const sc=Math.min(1,maxEdge/Math.max(w,h));
+      w=Math.round(w*sc); h=Math.round(h*sc);
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h); URL.revokeObjectURL(url);
+      res(cv.toDataURL('image/jpeg',quality)); };
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('Bild konnte nicht gelesen werden.'));};
+    img.src=url;
+  });
+}
+async function handleImage(file){
+  if(!file) return;
+  const status=document.getElementById('imgStatus');
+  status.textContent='📷 Bild wird gelesen…';
+  try{
+    const b64=(await downscale(file)).split(',')[1];
+    const r=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image_base64:b64, media_type:'image/jpeg'})});
+    const j=await r.json();
+    if(!r.ok) throw new Error(j.message||j.error||'Extraktion fehlgeschlagen');
+    const hs=j.holdings||[];
+    if(!hs.length){ status.textContent='Keine Positionen erkannt.'+(j.note?(' '+j.note):''); return; }
+    tickerRows=hs.map(h=>({ ticker:h.ticker||'', weight:(h.weight!=null?h.weight:''),
+      type:TYPES.includes(h.type)?h.type:'ETF', unresolved:!!h.unresolved }));
+    renderRows();
+    const unres=tickerRows.filter(r=>r.unresolved).length;
+    status.innerHTML=`✅ ${hs.length} Positionen erkannt.`+
+      (unres?` <b style="color:var(--alert)">${unres} ohne Ticker — rot markierte Zeilen mit Yahoo-Ticker ergänzen.</b>`:'')+
+      (j.note?`<br><span class="muted">${j.note}</span>`:'');
+  }catch(e){ status.innerHTML=`<span style="color:var(--alert)">${e.message}</span>`; }
+}
+function initDrop(){
+  const drop=document.getElementById('drop'), inp=document.getElementById('imgFile');
+  if(!drop) return;
+  drop.onclick=()=>inp.click();
+  inp.onchange=()=>handleImage(inp.files[0]);
+  ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hot');}));
+  ['dragleave'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hot');}));
+  drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('hot');
+    if(e.dataTransfer.files[0]) handleImage(e.dataTransfer.files[0]);});
+}
+initDrop();
 const readFile = f => new Promise(res=>{ if(!f) return res(null); const r=new FileReader(); r.onload=()=>res(r.result); r.readAsText(f); });
 const pct = (x,d=1) => x==null||!isFinite(x) ? 'n/a' : (x*100).toFixed(d)+'%';
 const num = (x,d=2) => x==null||!isFinite(x) ? 'n/a' : Number(x).toFixed(d);
@@ -154,20 +257,34 @@ async function run(){
       body.prices_csv   = await readFile(fPrices.files[0]);
       body.fundamentals_csv = await readFile(fFund.files[0]);
       if(!body.holdings_csv) throw new Error('holdings.csv fehlt');
+    } else if(MODE==='tickers'){
+      const rows=tickerRows
+        .filter(r=>String(r.ticker||'').trim() && parseFloat(r.weight)>0)
+        .map(r=>({ticker:String(r.ticker).trim(), weight:parseFloat(r.weight), type:r.type}));
+      if(!rows.length) throw new Error('Mindestens eine Zeile mit Ticker und Gewicht > 0.');
+      body.holdings=rows;
+      btn.textContent='Hole Kurse…';
     }
     const r = await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const j = await r.json();
     if(!r.ok) throw new Error((j.error||'Fehler')+': '+(j.message||''));
     render(j);
+    out.scrollIntoView({behavior:'smooth',block:'start'});
   }catch(e){
     out.style.display='block';
     banner.innerHTML='<div class="err">'+e.message+'</div>';
   }finally{ btn.disabled=false; btn.textContent='Analysieren'; }
 }
 
+function bannerHTML(j){
+  let h='';
+  if(j.meta.synthetic) h+='<div class="banner">⚠️ Synthetische Sample-Daten — nur zur Demonstration.</div>';
+  (j.meta.warnings||[]).forEach(w=>{ h+=`<div class="banner">⚠️ ${w}</div>`; });
+  return h;
+}
 function render(j){
   out.style.display='block';
-  banner.innerHTML = j.meta.synthetic ? '<div class="banner">⚠️ Synthetische Sample-Daten — nur zur Demonstration.</div>' : '';
+  banner.innerHTML = bannerHTML(j);
   const m=j.metrics, bm=j.benchmark_metrics||{};
   const tiles=[
     ['Ann. Rendite', pct(m.annualized_return), 'BM '+pct(bm.annualized_return)],

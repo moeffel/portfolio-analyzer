@@ -77,9 +77,40 @@ vercel --prod     # Production
 Oder das Repo in Vercel importieren (GitHub-Integration) — kein Build-Command nötig.
 
 > Die Web-App rendert Charts **clientseitig** (Chart.js) und braucht daher weder
-> matplotlib noch scipy in der Function. Fundamentaldaten kommen per **CSV-Upload**
-> oder aus dem eingebauten **synthetischen Sample** — kein externer Datenanbieter,
-> voll self-contained.
+> matplotlib noch scipy in der Function.
+
+## Web-App: Eingabe-Modi
+
+| Modus | Daten | Kurse/Fundamentals |
+|---|---|---|
+| **Ticker + Gewichte** | dynamische Zeilen (Ticker, Gewicht %, Typ) oder **Screenshot-Upload** | live via yfinance → Stooq-Fallback; Fundamentals immer (gedeckelt, zeitbudgetiert) |
+| **Sample** | eingebautes synthetisches Portfolio | offline |
+| **CSV-Upload** | `holdings.csv` (+ optional `prices.csv`, `fundamentals.csv`) | aus den CSVs |
+
+**Bild-Upload** schickt einen verkleinerten Screenshot an `/api/extract`, das per
+Claude-Vision (forced Tool-Use) Ticker + Gewichte extrahiert und die editierbare
+Tabelle vorbefüllt (human-in-the-loop). Zeilen ohne erkannten Ticker werden rot
+markiert und müssen ergänzt werden (ISINs ↦ Yahoo-Ticker sind nicht 1:1).
+
+### Umgebungsvariablen (Vercel → Project → Settings → Environment Variables)
+
+| Variable | Zweck | Pflicht |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Bild-Extraktion (Claude Vision), ~1–5 Cent/Bild | nur für Bild-Upload |
+| `VISION_MODEL` | Modell-Override (Default `claude-haiku-4-5-20251001`) | nein |
+
+Ohne `ANTHROPIC_API_KEY` funktionieren alle anderen Modi normal; der Bild-Upload
+zeigt eine klare Fehlermeldung.
+
+### Bekannte Grenzen (Live-Daten)
+
+- **Yahoo drosselt Datacenter-IPs** (Vercel): der Kursabruf kann fehlschlagen →
+  automatischer **Stooq-Fallback**; scheitert auch der, gibt es Allokations-/
+  Konzentrations-Diagnostik ohne Risikometriken + eine Warnung.
+- **Function-Timeout:** „Fundamentals immer" macht viele Netzwerk-Calls. Bei 504
+  in Vercel → Project → Settings → **Functions → Max Duration** auf 60 s anheben.
+- **Lambda-Größe:** yfinance-Deps (curl_cffi) liegen bei ~211 MB entpackt (Limit
+  250 MB). Bei Build-Größenfehler yfinance weiter runterpinnen oder auf Stooq-only.
 
 ## CSV-Format
 

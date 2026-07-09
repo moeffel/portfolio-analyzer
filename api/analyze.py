@@ -6,10 +6,15 @@ synthetic sample or user-uploaded CSV text.
 
 Request body (JSON):
 {
-  "mode": "sample" | "csv",
-  "config": {"mar": 0.02, "risk_free": 0.03, "benchmark": "WORLD", "max_crypto": 0.05},
-  "holdings_csv": "...", "prices_csv": "...", "fundamentals_csv": "..."   # mode=csv
+  "mode": "sample" | "csv" | "tickers",
+  "config": {"mar": 0.02, "risk_free": 0.03, "benchmark": "URTH", "max_crypto": 0.05},
+  "holdings_csv": "...", "prices_csv": "...", "fundamentals_csv": "...",  # mode=csv
+  "holdings": [{"ticker": "AAPL", "weight": 40, "type": "Aktie"}, ...]     # mode=tickers
 }
+
+mode=tickers fetches live prices (yfinance -> Stooq fallback) and, always,
+per-ticker fundamentals (capped + time-budgeted). All soft failures surface in
+meta.warnings rather than raising.
 """
 from __future__ import annotations
 
@@ -68,11 +73,208 @@ def _read_prices_text(text: str) -> pd.DataFrame:
     return wide.astype(float)
 
 
+_TYPE_MAP = {
+    "etf": ("equity", "etf"), "aktie": ("equity", "stock"), "stock": ("equity", "stock"),
+    "krypto": ("crypto", "crypto"), "crypto": ("crypto", "crypto"),
+    "anleihe": ("bond", "etf"), "bond": ("bond", "etf"),
+    "gold": ("gold", "etf"), "cash": ("cash", "etf"),
+}
+
+
+def _yf_symbol(ticker: str, asset_class: str) -> str:
+    """Display ticker -> Yahoo symbol. Crypto without a pair suffix -> '<T>-USD'."""
+    if asset_class == "crypto" and "-" not in ticker:
+        return f"{ticker}-USD"
+    return ticker
+
+
+def _holdings_from_rows(rows: list) -> pd.DataFrame:
+    """Build a holdings frame from [{ticker, weight, type?, asset_class?, name?}, ...].
+
+    Weights may be percentages or decimals; they are normalised to sum 1. Rows
+    with an empty ticker or a non-positive weight are dropped.
+    """
+    recs = []
+    for r in rows:
+        tkr = str(r.get("ticker", "")).strip().upper()
+        if not tkr:
+            continue
+        w = float(r.get("weight", r.get("value", 0)) or 0)
+        if w <= 0:
+            continue
+        typ = str(r.get("type", "") or "").strip().lower()
+        ac, st = _TYPE_MAP.get(typ, (None, None))
+        asset_class = r.get("asset_class") or ac or "equity"
+        recs.append({
+            "ticker": tkr,
+            "value": w,
+            "asset_class": asset_class,
+            "security_type": r.get("security_type") or st or "etf",
+            "name": r.get("name", tkr),
+            "yf_symbol": _yf_symbol(tkr, asset_class),
+        })
+    if not recs:
+        raise ValueError("Keine gültigen Ticker+Gewichte (>0) übergeben.")
+    df = pd.DataFrame(recs)
+    total = df["value"].sum()
+    if total > 0:
+        df["value"] = df["value"] / total  # normalise to Σ=1
+    return df
+
+
+def _fetch_prices_yf(symbols: list, period: str = "5y"):
+    """yfinance batch download. Returns (wide close df keyed by symbol, error|None)."""
+    try:
+        import yfinance as yf
+    except Exception as e:  # pragma: no cover - import/runtime env
+        return pd.DataFrame(), f"yfinance nicht verfügbar ({type(e).__name__})."
+    try:
+        raw = yf.download(symbols, period=period, auto_adjust=True,
+                          progress=False, threads=True)
+    except Exception as e:  # network / Yahoo throttling
+        return pd.DataFrame(), f"yfinance-Abruf fehlgeschlagen ({type(e).__name__})."
+    close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+    if isinstance(close, pd.Series):
+        close = close.to_frame(symbols[0])
+    return close.dropna(how="all"), None
+
+
+def _stooq_symbol(sym: str):
+    """Best-effort Yahoo->Stooq mapping. Returns None when we won't try (crypto)."""
+    s = sym.lower()
+    if "-" in s:          # crypto pair like btc-usd — Stooq unreliable, skip
+        return None
+    if "." in s:          # already carries an exchange suffix (e.g. iwda.as)
+        return s
+    return f"{s}.us"      # bare ticker -> assume US listing
+
+
+def _fetch_prices_stooq(symbols: list, budget_s: float = 12.0):
+    """Per-symbol Stooq CSV fallback, overall time-budgeted (sequential = timeout risk).
+
+    Returns (wide close df keyed by symbol, [failed]).
+    """
+    import time
+    import urllib.request
+
+    series, failed = {}, []
+    start = time.monotonic()
+    for sym in symbols:
+        s = _stooq_symbol(sym)
+        if not s or time.monotonic() - start > budget_s:
+            failed.append(sym)
+            continue
+        url = f"https://stooq.com/q/d/l/?s={s}&i=d"
+        try:
+            with urllib.request.urlopen(url, timeout=4) as resp:
+                text = resp.read().decode("utf-8", "replace")
+            df = pd.read_csv(io.StringIO(text))
+            if df.empty or "Close" not in df.columns or "Date" not in df.columns:
+                failed.append(sym)
+                continue
+            df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+            series[sym] = df.dropna(subset=["Date"]).set_index("Date")["Close"].astype(float)
+        except Exception:
+            failed.append(sym)
+    if not series:
+        return pd.DataFrame(), list(symbols)
+    return pd.DataFrame(series).sort_index(), failed
+
+
+def _fetch_fundamentals(holdings: pd.DataFrame, warnings: list,
+                        cap: int = 15, budget_s: float = 8.0) -> pd.DataFrame:
+    """Best-effort per-ticker fundamentals (non-crypto), capped and time-budgeted.
+
+    Indexed by the DISPLAY ticker so it aligns with prices/holdings. Missing
+    fields simply stay NaN — the factor engine skips them.
+    """
+    import time
+
+    try:
+        import yfinance as yf
+        from portfolio_analyzer.data.yfinance_adapter import _fundamentals_for
+    except Exception:
+        return pd.DataFrame()
+    targets = holdings[holdings["asset_class"] != "crypto"]
+    rows, attempted, skipped_budget = {}, 0, 0
+    start = time.monotonic()
+    for _, h in targets.iterrows():
+        if attempted >= cap:
+            warnings.append(f"Fundamentaldaten auf {cap} Titel gedeckelt.")
+            break
+        if time.monotonic() - start > budget_s:
+            skipped_budget += 1
+            continue
+        try:
+            info = _fundamentals_for(yf, h["yf_symbol"])
+            if info:
+                rows[h["ticker"]] = info
+        except Exception:
+            pass
+        attempted += 1
+    if skipped_budget:
+        warnings.append(f"Zeitbudget erreicht — Fundamentaldaten für {skipped_budget} "
+                        "Titel übersprungen.")
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame.from_dict(rows, orient="index")
+    df.index.name = "ticker"
+    return df
+
+
 def _market_data_from_payload(payload: dict, cfg: AnalysisConfig) -> MarketData:
     mode = payload.get("mode", "sample")
     if mode == "sample":
         from portfolio_analyzer.data.sample import make_sample
         return make_sample()
+
+    if mode == "tickers":
+        rows = payload.get("holdings") or []
+        holdings = _holdings_from_rows(rows)
+        period = payload.get("period", "5y")
+        warnings: list = []
+
+        bench = cfg.benchmark
+        if bench and bench.upper() == "WORLD":  # sample-only ticker -> real proxy
+            bench = "URTH"
+            warnings.append("Benchmark 'WORLD' existiert nur in den Sample-Daten — "
+                            "nutze URTH (MSCI World ETF).")
+
+        sym_of = dict(zip(holdings["ticker"], holdings["yf_symbol"]))
+        all_syms = list(dict.fromkeys(list(holdings["yf_symbol"]) + ([bench] if bench else [])))
+
+        prices, err = _fetch_prices_yf(all_syms, period)
+        source = "yfinance"
+        if prices.empty:
+            if err:
+                warnings.append(err)
+            warnings.append("Yahoo lieferte keine Kurse — Stooq-Fallback wird versucht.")
+            prices, _failed = _fetch_prices_stooq(all_syms)
+            source = "stooq"
+            if prices.empty:
+                warnings.append("Auch Stooq lieferte keine Kurse — nur Allokations-/"
+                                "Konzentrations-Diagnostik ohne Risikometriken.")
+
+        benchmark_prices = None
+        if not prices.empty:
+            if bench and bench in prices.columns:
+                benchmark_prices = prices[bench]
+                prices = prices.drop(columns=[bench])
+            prices = prices.rename(columns={v: k for k, v in sym_of.items()})
+            got = set(prices.columns)
+            missing = [t for t in holdings["ticker"] if t not in got]
+            if missing:
+                warnings.append(f"Keine Kurse für: {', '.join(missing)} "
+                                "(Ticker/Börsensuffix prüfen, z.B. .DE/.AS/.VI).")
+
+        fundamentals = _fetch_fundamentals(holdings, warnings)
+
+        return MarketData(
+            prices=prices if not prices.empty else pd.DataFrame(),
+            fundamentals=fundamentals, holdings=holdings,
+            benchmark_prices=benchmark_prices,
+            meta={"source": f"tickers ({source})", "warnings": warnings},
+        )
 
     holdings_csv = payload.get("holdings_csv")
     if not holdings_csv:
@@ -131,7 +333,8 @@ def _serialize(result, cfg) -> dict:
 
     return {
         "meta": {"source": result.meta.get("source"), "synthetic": bool(result.meta.get("synthetic")),
-                 "n_obs": m.get("n_obs"), "mar": cfg.mar, "risk_free": cfg.risk_free},
+                 "n_obs": m.get("n_obs"), "mar": cfg.mar, "risk_free": cfg.risk_free,
+                 "warnings": [w for w in (result.meta.get("warnings") or []) if w]},
         "metrics": m,
         "benchmark_metrics": bm,
         "diversification": {k: _clean(v) for k, v in result.diversification.items()},

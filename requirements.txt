@@ -1,4 +1,8 @@
-# Vercel serverless-function deps ONLY (kept slim for fast, small builds).
-# The API path imports just the numpy/pandas analytics core — no matplotlib/scipy.
+# Vercel serverless-function deps.
+# analyze.py: numpy/pandas analytics core + yfinance for live prices.
+# extract.py: calls the Anthropic API via stdlib urllib (no SDK needed).
+# yfinance is pinned: its dep tree (curl_cffi ~31MB) sits near the lambda size
+# limit — a newer major could push the unzipped bundle over 250MB.
 numpy>=1.24
 pandas>=2.0
+yfinance>=1.5,<1.6

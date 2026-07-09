@@ -3,12 +3,18 @@
     {
       "src": "api/analyze.py",
       "use": "@vercel/python",
-      "config": { "includeFiles": "portfolio_analyzer/**" }
+      "config": { "includeFiles": "portfolio_analyzer/**", "maxLambdaSize": "250mb" }
+    },
+    {
+      "src": "api/extract.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "250mb" }
     },
     { "src": "*.html", "use": "@vercel/static" }
   ],
   "routes": [
     { "src": "/api/analyze", "methods": ["GET", "POST", "OPTIONS"], "dest": "/api/analyze.py" },
+    { "src": "/api/extract", "methods": ["GET", "POST", "OPTIONS"], "dest": "/api/extract.py" },
     { "handle": "filesystem" },
     { "src": "/", "dest": "/index.html" }
   ]
