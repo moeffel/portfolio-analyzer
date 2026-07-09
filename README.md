@@ -109,12 +109,18 @@ portfolio_analyzer/        Python-Paket
   report/                  charts.py (matplotlib) · markdown.py  (nur CLI)
   cli.py
 api/analyze.py             Vercel-Serverless-Function (JSON, nutzt engine)
+research.html              Zitierter Research-Report (auf Vercel unter /research.html)
 index.html                 Web-Frontend (Chart.js, clientseitige Charts)
 dashboard/app.py           Streamlit
 tests/                     18 Tests (Risiko gegen Closed-Form, Faktoren, Engine)
 samples/                   funktionierende Beispiel-CSVs
-vercel.json  requirements.txt  requirements-local.txt  pyproject.toml
+vercel.json  requirements.txt  requirements-local.txt
 ```
+
+> Hinweis: Bewusst **keine** `pyproject.toml` im Root — sie würde Vercels neuen
+> „Python-App-Entrypoint"-Modus triggern und das `api/`-Functions-Modell aushebeln.
+> Lokal via `requirements-local.txt` installieren; die CLI läuft über
+> `python -m portfolio_analyzer.cli`.
 
 ## Tests
 ```bash
