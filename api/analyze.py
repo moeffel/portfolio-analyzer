@@ -381,8 +381,67 @@ def _aggregate_lookthrough(holdings: pd.DataFrame, per_etf: dict) -> dict:
     top = sorted(
         ({"symbol": k, "name": names[k], "weight": v} for k, v in effective.items()),
         key=lambda d: d["weight"], reverse=True,
-    )[:15]
+    )[:30]
     return {"top": top, "sectors": sectors, "coverage": coverage}
+
+
+_TICKER_RE = re.compile(r"[A-Z0-9][A-Z0-9.\-]{0,11}")
+_NON_TICKER = {"-", "CASH", "USD", "EUR", "GBP", "N/A", "NA", ""}
+
+
+def _looks_like_ticker(sym: str) -> bool:
+    """Filter out cash/placeholder rows in Yahoo top_holdings before pricing."""
+    s = (sym or "").strip().upper()
+    return s not in _NON_TICKER and bool(_TICKER_RE.fullmatch(s))
+
+
+def _constituent_analysis(top: list, benchmark: str, period: str, warnings: list, n: int = 20) -> dict:
+    """Correlation + per-name risk for the top-N effective single names (one price batch)."""
+    from portfolio_analyzer.analytics import returns as R
+    from portfolio_analyzer.analytics import risk as Risk
+    from portfolio_analyzer.analytics import portfolio as P
+
+    cand = [t for t in top if _looks_like_ticker(t.get("symbol"))][:n]
+    if len(cand) < 2:
+        return {}
+    syms = list(dict.fromkeys(t["symbol"].upper() for t in cand))
+    all_syms = syms + ([benchmark] if benchmark else [])
+    prices, _err = _fetch_prices_yf(all_syms, period)
+    if prices.empty:
+        prices, _ = _fetch_prices_stooq(all_syms)
+    if prices.empty:
+        warnings.append("Einzeltitel-Kurse nicht verfügbar — Korrelation übersprungen.")
+        return {}
+
+    bench_ret = None
+    if benchmark and benchmark in prices.columns:
+        bench_ret = R.to_returns(prices[benchmark])
+        prices = prices.drop(columns=[benchmark])
+    rets = R.to_returns(prices)
+    got = [s for s in syms if s in rets.columns]
+    if len(got) < 2:
+        warnings.append("Zu wenige Einzeltitel-Kurse für eine Korrelationsmatrix.")
+        return {}
+
+    ppy = 252
+    meta = {t["symbol"].upper(): t for t in cand}
+    per_name = [{
+        "symbol": s, "name": meta[s]["name"], "weight": _clean(meta[s]["weight"]),
+        "vol": _clean(Risk.volatility(rets[s], ppy)),
+        "beta": _clean(Risk.beta(rets[s], bench_ret)) if bench_ret is not None else None,
+        "ann_return": _clean(R.annualized_return(rets[s], ppy)),
+    } for s in got]
+    corr = P.correlation_matrix(rets[got])
+    missing = [s for s in syms if s not in got]
+    if missing:
+        warnings.append(f"Einzeltitel ohne Kurs (Korrelation): {', '.join(missing[:8])}"
+                        + (" …" if len(missing) > 8 else ""))
+    return {
+        "tickers": got,
+        "matrix": [[_clean(v) for v in row] for row in corr.values],
+        "per_name": per_name,
+        "avg_corr": _clean(P.average_pairwise_correlation(rets[got])),
+    }
 
 
 def _market_data_from_payload(payload: dict, cfg: AnalysisConfig) -> MarketData:
@@ -475,12 +534,18 @@ def _market_data_from_payload(payload: dict, cfg: AnalysisConfig) -> MarketData:
                 warnings.append(f"Zeitbudget erreicht — ETF-Durchschau für {skipped} ETF(s) übersprungen.")
         lookthrough = _aggregate_lookthrough(holdings, per_etf) if per_etf or not holdings.empty else {}
 
+        # Top-N constituent correlation + risk (from the effective single names)
+        constituents = {}
+        if payload.get("lookthrough", True) and lookthrough.get("top"):
+            constituents = _constituent_analysis(lookthrough["top"], bench, period, warnings)
+
         return MarketData(
             prices=prices if not prices.empty else pd.DataFrame(),
             fundamentals=fundamentals, holdings=holdings,
             benchmark_prices=benchmark_prices,
             meta={"source": f"tickers ({source})", "warnings": warnings,
-                  "period": period, "etf_breakdown": breakdown, "lookthrough": lookthrough},
+                  "period": period, "etf_breakdown": breakdown, "lookthrough": lookthrough,
+                  "constituents": constituents},
         )
 
     holdings_csv = payload.get("holdings_csv")
@@ -563,6 +628,7 @@ def _serialize(result, cfg) -> dict:
         "flags": [f.as_dict() for f in result.flags],
         "etf_breakdown": result.meta.get("etf_breakdown") or [],
         "lookthrough": lookthrough,
+        "constituents": result.meta.get("constituents") or {},
     }
 
 

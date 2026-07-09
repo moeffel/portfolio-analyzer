@@ -158,3 +158,40 @@ def test_lookthrough_aggregates_weights_sectors_coverage():
     assert abs(lt["sectors"]["Technology"] - (0.5 * 0.8 + 0.3 * 1.0)) < 1e-9  # 0.7
     assert abs(lt["coverage"] - (0.5 * 0.15 + 0.3 * 0.20 + 0.2)) < 1e-9       # 0.335
     assert lt["top"][0]["weight"] >= lt["top"][-1]["weight"]     # sorted desc
+
+
+def test_looks_like_ticker():
+    assert analyze._looks_like_ticker("AAPL")
+    assert analyze._looks_like_ticker("NESN.SW")
+    assert analyze._looks_like_ticker("BRK-B")
+    for bad in ("", "-", "CASH", "USD", "EUR", "N/A"):
+        assert not analyze._looks_like_ticker(bad)
+
+
+def test_constituent_analysis_builds_matrix_and_metrics(monkeypatch):
+    import numpy as np
+    import pandas as pd
+    dates = pd.bdate_range("2022-01-01", periods=300)
+    rng = np.random.default_rng(4)
+
+    def fake_prices(symbols, period="5y"):
+        data = 100 * np.exp(np.cumsum(rng.normal(0.0004, 0.011, (300, len(symbols))), axis=0))
+        return pd.DataFrame(data, index=dates, columns=symbols).rename_axis("date"), None
+
+    monkeypatch.setattr(analyze, "_fetch_prices_yf", fake_prices)
+    top = [{"symbol": s, "name": s, "weight": w}
+           for s, w in [("AAPL", 0.08), ("MSFT", 0.06), ("NVDA", 0.05), ("AMZN", 0.03)]]
+    warns = []
+    c = analyze._constituent_analysis(top, "URTH", "3y", warns, n=20)
+    assert c["tickers"] == ["AAPL", "MSFT", "NVDA", "AMZN"]
+    assert len(c["matrix"]) == 4 and len(c["matrix"][0]) == 4       # square
+    assert abs(c["matrix"][0][0] - 1.0) < 1e-9                      # diagonal ~1
+    assert abs(c["matrix"][1][2] - c["matrix"][2][1]) < 1e-9        # symmetric
+    per = {p["symbol"]: p for p in c["per_name"]}
+    assert per["AAPL"]["vol"] is not None and per["AAPL"]["beta"] is not None
+    assert c["avg_corr"] is not None
+
+
+def test_constituent_analysis_needs_two_pricable():
+    warns = []
+    assert analyze._constituent_analysis([{"symbol": "-", "name": "Cash", "weight": 1.0}], "URTH", "5y", warns) == {}

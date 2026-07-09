@@ -100,6 +100,12 @@ Yahoo legt nur die **Top-~10** je ETF offen → die Card weist die abgedeckte
 **Coverage** transparent aus. **Zeitraum** (1y–max) ist im UI umstellbar und steuert
 Kursabruf + alle Kennzahlen.
 
+**Einzeltitel-Durchschau (Top-N):** Aus den effektiven Einzeltiteln werden die **Top-~20**
+nach Gewicht bepreist (ein Batch-Download) und eine echte **Korrelationsmatrix** + Risiko
+je Titel (Vol, Beta, Rendite) berechnet. Grenze: nur die offengelegten Top-Holdings, nicht
+der ganze Korb — eine **vollständige** 500+-Titel-Korrelation bräuchte eine bezahlte
+Bulk-Kursdaten-API (auf Vercel-Serverless nicht sinnvoll machbar).
+
 ### Umgebungsvariablen (Vercel → Project → Settings → Environment Variables)
 
 | Variable | Zweck | Pflicht |
