@@ -1,6 +1,15 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "api/analyze.py": { "maxDuration": 30, "memory": 1024 }
-  }
+  "builds": [
+    {
+      "src": "api/analyze.py",
+      "use": "@vercel/python",
+      "config": { "includeFiles": "portfolio_analyzer/**" }
+    },
+    { "src": "*.html", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/analyze", "methods": ["GET", "POST", "OPTIONS"], "dest": "/api/analyze.py" },
+    { "handle": "filesystem" },
+    { "src": "/", "dest": "/index.html" }
+  ]
 }
